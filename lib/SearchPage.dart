@@ -57,67 +57,7 @@ Future<void> searchListener()async{
    });
 }
 
-Future<void> showPlaylistSelector(int songId)async{
-  final playlists = await dbPlaylist.loadPlaylist();
-  if(!mounted)return;
-  showModalBottomSheet(context: context, builder: (context){
-    return ListView.builder(
-        itemCount: playlists.length,
 
-        itemBuilder: (context, index){
-          final playlist = playlists[index];
-          return ListTile(
-            title: Text(playlist.name),
-            onTap: ()async{
-              await dbPlaylist.addSongToPlaylist(playlist.name, songId);
-              Navigator.pop(context);
-            },
-
-          );
-
-        }
-    );
-  });
-
-}
-
-void songMenu(BuildContext context, Song s){
-  showModalBottomSheet(context: context, builder: (context){
-    return Column(
-      mainAxisSize: .min,
-      children: [
-
-        ListTile(
-          leading: const Icon(Icons.playlist_add),
-          title: const Text("Aggiungi a una playlist"),
-          onTap: (){
-            showPlaylistSelector(s.id!);
-            Navigator.pop(context);
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.music_off),
-          title: const Text("Rimuovi dall player"),
-          onTap: ()async{
-            //await pDb.removeASongFromAPLaylist(widget.playList!.name, s.id!);
-            await dbSong.remove(s.id!);
-
-            Navigator.pop(context);
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.add_to_queue_outlined),
-          title: const Text("Aggiungi in coda"),
-          onTap: ()async{
-            pl.queue.add(s);
-            pl.loadQueue(pl.queue, 0);
-          },
-        )
-
-      ],
-    );
-  });
-}
 
 Widget songsWidget(){
   if(songSearched.isNotEmpty){
@@ -125,9 +65,9 @@ Widget songsWidget(){
       children: List.generate(songSearched.length, (index){
         return  InkWell(
           onTap: ()async{
-            pl.queue.clear();
-            pl.queue.add(songSearched[index]);
-            pl.loadQueue(pl.queue, 0);
+            pl.queueSongs.clear();
+            pl.queueSongs.add(songSearched[index]);
+            pl.loadQueue(pl.queueSongs, 0);
 
             setState(() {
 

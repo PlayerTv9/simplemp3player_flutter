@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:simplemp3pkayer/Widgets_player.dart';
 
 import 'Database.dart';
 
@@ -53,7 +54,7 @@ Widget indexWidget(int? index){
 
 
 Widget songWidget(Song s, int? index){
-  final audio = AudioPlayer();
+
 
   return Row(
     mainAxisAlignment: .center,
@@ -71,26 +72,99 @@ Widget songWidget(Song s, int? index){
           ],
         );
       }),
-      FutureBuilder(future: audio.setAudioSource(AudioSource.file(s.path)), builder: (context, snapshot){
-        if(snapshot.hasError){
-          return Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.error,
-              size: 20,
-            ),
-          );
-        }
-        return const Text("");
-      })
+     
 
 
 
     ],
   );
+}
+
+Future<void> showPlaylistSelector(int songId, BuildContext context)async{
+  final pl = playlistManager();
+  final dbSong = songDatabase();
+  final playlists = await pl.loadPlaylist();
+  if(!context.mounted)return;
+  showModalBottomSheet(context: context, builder: (context){
+    return ListView.builder(
+        itemCount: playlists.length,
+
+        itemBuilder: (context, index){
+          final playlist = playlists[index];
+          return ListTile(
+            title: Text(playlist.name),
+            onTap: ()async{
+              await pl.addSongToPlaylist(playlist.name, songId);
+              Navigator.pop(context);
+            },
+
+          );
+
+        }
+    );
+  });
+
+}
+
+enum menuType{
+  normal,
+  queue,
+}
+
+void songMenu(BuildContext context, Song s, {menuType type = menuType.normal, int index=-1}){
+  final pl = PlayerManager();
+  final dbSong = songDatabase();
+  showModalBottomSheet(context: context, builder: (context){
+    return Column(
+      mainAxisSize: .min,
+      children: [
+
+        ListTile(
+          leading: const Icon(Icons.playlist_add),
+          title: const Text("Aggiungi a una playlist"),
+          onTap: (){
+            showPlaylistSelector(s.id!, context);
+            Navigator.pop(context);
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.music_off),
+          title: const Text("Rimuovi dall player"),
+          onTap: ()async{
+            //await pDb.removeASongFromAPLaylist(widget.playList!.name, s.id!);
+            await dbSong.remove(s.id!);
+
+            Navigator.pop(context);
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.add_to_queue_outlined),
+          title: const Text("Aggiungi in coda"),
+          onTap: ()async{
+            await pl.addASongsToQueue([s]);
+            Navigator.pop(context);
+          },
+        ),
+        menuAdded(context, index, type),
+
+
+      ],
+    );
+  });
+}
+
+Widget menuAdded(BuildContext context, int index, menuType tipo){
+  if(tipo==menuType.queue){
+    return ListTile(
+      leading: const Icon(Icons.remove_from_queue),
+      title: const Text("Rimuovi dalla coda"),
+      onTap: ()async{
+        Navigator.pop(context);
+        final pl = PlayerManager();
+        await pl.removeSongAt(index);
+
+      },
+    );
+  }
+  return const Text("");
 }

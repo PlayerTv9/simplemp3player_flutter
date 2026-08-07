@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:marquee/marquee.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'Queue.dart';
 import 'Database.dart';
@@ -9,7 +13,7 @@ import "sekkbar.dart";
 
 String formatDuraton(Duration d){
   final minuetes = d.inMinutes;
-  final seconds = d.inSeconds;
+  final seconds = d.inSeconds % 60;
   return '$minuetes:${seconds.toString().padLeft(2, '0')}';
 }
 
@@ -18,6 +22,7 @@ class PlayerManager{
     player.currentIndexStream.listen((index){
       if(index!=null){
         currentIndex = index;
+
       }
     });
   }
@@ -27,29 +32,102 @@ class PlayerManager{
   final AudioPlayer player = AudioPlayer();
 
 
-  List<Song> queue = [];
+  List<Song> queueSongs = [];
   int currentIndex = 0;
 
-  Song? get currentSong => queue.isEmpty ? null : queue[currentIndex];
+  Song? get currentSong => queueSongs.isEmpty ? null : queueSongs[currentIndex];
 
   Future<void> loadQueue(
       List<Song> songs,
       int startIndex,
       ) async {
 
-    queue = List.from(songs);
+    queueSongs = List.from(songs);
     currentIndex = startIndex;
 
+    final playlist = await Future.wait(
+        queueSongs.map((s)async=>await getAudioSource(s))
+    );
+
+
     await player.setAudioSources(
-      queue.map((s) => AudioSource.file(s.path)).toList(),
+      playlist,
       initialIndex: startIndex,
     );
 
+
+
     player.play();
+
+  }
+
+  Future<void> addASongsToQueue(List<Song> newSongs)async{
+    queueSongs.addAll(newSongs);
+
+    final currentPlaylist = player.audioSource;
+    if(currentPlaylist != null){
+      final newSources = await Future.wait(
+        newSongs.map((s)async=>await getAudioSource(s))
+      );
+
+      await player.addAudioSources(newSources);
+    }else{
+      await loadQueue(queueSongs, currentIndex);
+    }
+  }
+
+  Future<void> removeSongAt(int index)async{
+    if(index<0 || index>=queueSongs.length)return;
+    queueSongs.removeAt(index);
+    await player.removeAudioSourceAt(index);
+  }
+
+  Future<void> moveSong(int oldIndex, int newIndex)async{
+    if(oldIndex<0 || oldIndex>=queueSongs.length)return;
+    if(newIndex<0 || newIndex>=queueSongs.length)return;
+    if(oldIndex==newIndex)return;
+    final song = queueSongs.removeAt(oldIndex);
+    queueSongs.insert(newIndex, song);
+    await player.moveAudioSource(oldIndex, newIndex);
+
+  }
+
+  Future<Uri?> getUriByTempFile(Metadata m, Song s)async{
+    if(m.picture != null && m.picture!.data.isNotEmpty){
+      final tempDIr = await getTemporaryDirectory();
+      final file = File('${tempDIr.path}/cover_${s.id ?? s.path.hashCode}.jpg');
+      if(!await file.exists()){
+        await file.writeAsBytes(m.picture!.data);
+
+      }
+      return Uri.file(file.path);
+    }
+    return null;
+  }
+
+  Future<UriAudioSource> getAudioSource(Song s)async{
+    final metadati = await MetadataGod.readMetadata(file: s.path);
+    final picture = await getUriByTempFile(metadati, s);
+    return AudioSource.file(
+      s.path,
+      tag: MediaItem(
+          id: s.path,
+          title: metadati.title ?? s.Name,
+          artist: metadati.artist ?? "Autore sconosciuto",
+          album: metadati.album ?? "--",
+          duration: metadati.duration ?? Duration(milliseconds: 0),
+          artUri: picture
+
+      )
+    );
   }
 
 
+
+
 }
+
+
 
 
 class miniPlayer extends StatefulWidget{

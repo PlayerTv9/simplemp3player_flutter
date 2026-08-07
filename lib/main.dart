@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:file_picker/file_picker.dart';
+
 import 'package:metadata_god/src/rust/frb_generated.dart';
 import 'package:on_audio_query_pluse/on_audio_query.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'dart:io';
 
 
@@ -19,6 +21,15 @@ void main() async{
   await RustLib.init();
   final db = songDatabase();
   await db.init();
+
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.tommaso.simplemp3player.channel.audio',
+    androidNotificationChannelName: 'audio playback',
+    androidNotificationOngoing: true
+  );
+
+
+
   runApp(const MyApp());
 }
 
@@ -132,9 +143,9 @@ class _MyHomePageState extends State<MyHomePage> {
       //if(await db.isSongNotInserted(result.names[0]!)){
         final nSong = Song(Name: result.names[0]!, path: newFile.path,duration: 0);
         await db.insert(nSong);
-        pl.queue.add(nSong);
+        pl.queueSongs.add(nSong);
 
-        await pl.loadQueue(pl.queue, pl.currentIndex);
+        await pl.loadQueue(pl.queueSongs, pl.currentIndex);
 
         setState(() {
 
@@ -158,8 +169,8 @@ class _MyHomePageState extends State<MyHomePage> {
   Future<void> selectASong(int id)async{
     final song = await db.getASongById(id);
     if (song != null){
-      pl.queue.add(song);
-      await pl.loadQueue(pl.queue, pl.currentIndex);
+      pl.queueSongs.add(song);
+      await pl.loadQueue(pl.queueSongs, pl.currentIndex);
     }
 
     setState(() {
@@ -195,7 +206,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Future<void> showAddMenu()async{
-    pl.queue.forEach((f)=>print(f.Name));
+    pl.queueSongs.forEach((f)=>print(f.Name));
     showModalBottomSheet(context: context, builder: (context){
       return SafeArea(child: Column(
         mainAxisSize: .min,
@@ -216,6 +227,14 @@ class _MyHomePageState extends State<MyHomePage> {
               addPlaylist();
             },
 
+          ),
+          ListTile(
+            leading: const Icon(Icons.library_music),
+            title: const Text("Sincoranizza con la cartella 'music' del dispositivo"),
+            onTap: (){
+              Navigator.pop(context);
+              getSOngsIntoPhone();
+            },
           )
         ],
       ));
@@ -257,7 +276,7 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     // TODO: implement initState
     super.initState();
-    getSOngsIntoPhone();
+    //getSOngsIntoPhone();
     db.loadSong();
 
 

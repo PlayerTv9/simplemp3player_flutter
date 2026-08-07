@@ -20,75 +20,9 @@ class _openPlaylistState extends State<openPlayListPage>{
   final pDb = playlistManager();
   PlayerManager pl = PlayerManager();
 
-  Future<void> showPlaylistSelector(int songId)async{
-    final playlists = await pDb.loadPlaylist();
-    if(!mounted)return;
-    showModalBottomSheet(context: context, builder: (context){
-      return ListView.builder(
-          itemCount: playlists.length,
 
-          itemBuilder: (context, index){
-            final playlist = playlists[index];
-            return ListTile(
-              title: Text(playlist.name),
-              onTap: ()async{
-                await pDb.addSongToPlaylist(playlist.name, songId);
-                Navigator.pop(context);
-              },
 
-            );
 
-          }
-      );
-    });
-
-  }
-
-  void songMenu(BuildContext context, Song s){
-    showModalBottomSheet(context: context, builder: (context){
-    return Column(
-      mainAxisSize: .min,
-      children: [
-        ListTile(
-          leading: const Icon(Icons.playlist_remove),
-          title: const Text("Rimuovi dalla playlist"),
-          onTap: ()async{
-            await pDb.removeASongFromAPLaylist(widget.playList!.name, s.id!);
-
-            Navigator.pop(context);
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.playlist_add),
-          title: const Text("Aggiungi a un'altra playlist"),
-          onTap: (){
-            showPlaylistSelector(s.id!);
-            Navigator.pop(context);
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.music_off),
-          title: const Text("Rimuovi dall player"),
-          onTap: ()async{
-            await pDb.removeASongFromAPLaylist(widget.playList!.name, s.id!);
-            await db.remove(s.id!);
-
-            Navigator.pop(context);
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.add_to_queue_outlined),
-          title: const Text("Aggiungi in coda"),
-          onTap: ()async{
-            pl.queue.add(s);
-            pl.loadQueue(pl.queue, 0);
-          },
-        )
-
-      ],
-    );
-    });
-  }
   Widget getSongsInsideAPlaylist(){
       if(widget.playList != null){
         return FutureBuilder(future: db.getSongsById(widget.playList!.songs), builder: (context, snapshot){
@@ -109,9 +43,9 @@ class _openPlaylistState extends State<openPlayListPage>{
                 onTap: ()async{
 
 
-                  pl.queue.clear();
-                  pl.queue.add(songs[index]);
-                  pl.loadQueue(pl.queue, 0);
+                  pl.queueSongs.clear();
+                  pl.queueSongs.add(songs[index]);
+                  pl.loadQueue(pl.queueSongs, 0);
 
                   setState(() {
 
@@ -162,8 +96,8 @@ class _openPlaylistState extends State<openPlayListPage>{
           onPressed: ()async{
   if(widget.playList == null) return;
   List<Song> newQueue = await db.getSongsById(widget.playList!.songs);
-  pl.queue = List.from(newQueue);
-  pl.loadQueue(pl.queue, 0);},
+  pl.queueSongs = List.from(newQueue);
+  pl.loadQueue(pl.queueSongs, 0);},
     tooltip: 'Riproduci la playlist',
   child: const Icon(Icons.play_arrow_outlined),
 
