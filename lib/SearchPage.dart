@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:simplemp3pkayer/Widgets_player.dart';
+import 'Widgets_player.dart';
 import 'Database.dart';
 import 'songWidget.dart';
 import 'openPlaylistPage.dart';
@@ -23,16 +23,28 @@ final controller = TextEditingController();
  List<PlayList> allPlaylist = [];
  List<Song> allSongs = [];
  final dbSong = songDatabase();
- final dbPlaylist = playlistManager();
+ //final dbPlaylist = playlistManager();
+
+ bool isLoading = true;
 
  Future<void> load()async{
-   allSongs = await dbSong.getAllSongs();
-   allPlaylist = await dbPlaylist.loadPlaylist();
+   try{
+     final db = songDatabase();
+
+      final songs = await db.getAllSongs();
+      final Playlists = await db.getAllPlaylists();
 
    if(mounted){
      setState(() {
-
+        isLoading = false;
+        allSongs = songs;
+        allPlaylist = Playlists;
      });
+   }}catch(e){
+     print("Errore seachPage: $e");
+   setState(() {
+     isLoading = false;
+   });
    }
  }
 
@@ -95,10 +107,13 @@ Widget songsWidget(){
 }
 
 Future<void> openAPLaylists(PlayList p, int id)async{
-  await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(playList: p,id: id,)));
+  await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
 }
 
 Widget playlistsWidget(){
+   if(isLoading){
+     return CircularProgressIndicator();
+   }
   if(playlistSearched.isNotEmpty){
     return Column(
       children:

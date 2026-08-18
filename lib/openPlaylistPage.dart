@@ -6,9 +6,8 @@ import 'Database.dart';
 import 'songWidget.dart';
 
 class openPlayListPage extends StatefulWidget{
-  final PlayList? playList;
   final int? id;
-  const openPlayListPage({super.key,this.playList,this.id});
+  const openPlayListPage({super.key,this.id});
 
   @override
   State<StatefulWidget> createState() => _openPlaylistState();
@@ -17,15 +16,17 @@ class openPlayListPage extends StatefulWidget{
 
 class _openPlaylistState extends State<openPlayListPage>{
   final db = songDatabase();
-  final pDb = playlistManager();
+  //final pDb = playlistManager();
   PlayerManager pl = PlayerManager();
+  PlayList? playList;
+  bool hasLoaded = false;
 
 
 
 
-  Widget getSongsInsideAPlaylist(){
-      if(widget.playList != null){
-        return FutureBuilder(future: db.getSongsById(widget.playList!.songs), builder: (context, snapshot){
+  Widget getSongsInsideAPlaylist(PlayList? p){
+      if(p != null){
+        return FutureBuilder(future: db.getSongsById(p.songs), builder: (context, snapshot){
           if(snapshot.connectionState == ConnectionState.waiting)return CircularProgressIndicator();
           if(!snapshot.hasData || snapshot.data!.isEmpty){
             return const Text("La playlist è ancora vuota!");
@@ -52,7 +53,7 @@ class _openPlaylistState extends State<openPlayListPage>{
                   });
                 },
                 onLongPress: (){
-                  songMenu(context, songs[index]);
+                  songMenu(context, songs[index], pId: widget.id!, type: menuType.Playlist);
                   setState(() {
 
                   });
@@ -67,12 +68,32 @@ class _openPlaylistState extends State<openPlayListPage>{
         return const Text("Nessuna playlist inserita!");
 
   }
+
+
+
+  Future<void> loadPlaylist()async{
+    playList = await db.getAPlaylistById(widget.id!);
+    setState(() {
+      hasLoaded = true;
+    });
+
+  }
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    loadPlaylist();
+
+  }
+
   @override
   Widget build(BuildContext context) {
+
+    if(!hasLoaded) return CircularProgressIndicator();
     // TODO: implement build
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.playList?.name ?? "Nessuna playlist selezionata"),
+        title: Text(playList?.name ?? "Nessuna playlist selezionata"),
 
       ),
       body: Stack(
@@ -80,7 +101,7 @@ class _openPlaylistState extends State<openPlayListPage>{
 
 
 
-          getSongsInsideAPlaylist(),
+          getSongsInsideAPlaylist(playList),
 
           Align(
               alignment: Alignment.bottomCenter,
@@ -94,8 +115,8 @@ class _openPlaylistState extends State<openPlayListPage>{
       ),
       floatingActionButton: FloatingActionButton(
           onPressed: ()async{
-  if(widget.playList == null) return;
-  List<Song> newQueue = await db.getSongsById(widget.playList!.songs);
+  if(playList == null) return;
+  List<Song> newQueue = await db.getSongsById(playList!.songs);
   pl.queueSongs = List.from(newQueue);
   pl.loadQueue(pl.queueSongs, 0);},
     tooltip: 'Riproduci la playlist',

@@ -62,6 +62,7 @@ class PlayerManager{
   }
 
   Future<void> addASongsToQueue(List<Song> newSongs)async{
+
     queueSongs.addAll(newSongs);
 
     final currentPlaylist = player.audioSource;
@@ -106,6 +107,7 @@ class PlayerManager{
   }
 
   Future<UriAudioSource> getAudioSource(Song s)async{
+
     final metadati = await MetadataGod.readMetadata(file: s.path);
     final picture = await getUriByTempFile(metadati, s);
     return AudioSource.file(
@@ -289,7 +291,7 @@ class _miniPLayerState extends State<miniPlayer>{
     return GestureDetector(
       onTap: widget.expand,
       child: Container(
-        height: 90,
+        height: 100,
         margin: const EdgeInsets.symmetric(
           horizontal: 8,
           vertical: 8
@@ -304,6 +306,8 @@ class _miniPLayerState extends State<miniPlayer>{
           artworkWidget(),
             SizedBox(width: 10,),
 
+
+
             Column(
               children: [
                 Expanded(
@@ -312,9 +316,6 @@ class _miniPLayerState extends State<miniPlayer>{
                       crossAxisAlignment: .center,
                       children: [
                         songTitle( metadata != null && metadata!.title != null  ? metadata!.title! : "Nessuna canzone scelta")
-
-
-
 
                       ],
                     )),
@@ -364,42 +365,10 @@ class _miniPLayerState extends State<miniPlayer>{
                 ),
 
                 SizedBox(
-                  height: 10,
+                  height: 40,
                   child: AudioSeekBar(player: widget.audio),
                 ),
 
-                StreamBuilder<Duration>(
-                  stream: widget.audio.positionStream,
-                  builder: (context, snapshot){
-                    final pos = snapshot.data ?? Duration.zero;
-                    final duration = widget.audio.duration ?? Duration.zero;
-
-
-
-
-
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-
-
-                        Padding(padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: Row(
-
-                            children: [
-                              Text("${formatDuraton(pos)}/${formatDuraton(duration)}",
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10
-                                ),)
-                            ],
-                          ),)
-
-                      ],
-                    );
-
-                  },
-                ),
 
 
               ],
@@ -595,26 +564,12 @@ Widget build(BuildContext context) {
           // 🔥 SEEK BAR ISOLATA (NON CRASHA PIÙ)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: AudioSeekBar(player: widget.audio),
+            child: AudioSeekBar(player: widget.audio, color: Colors.black,),
           ),
 
           const SizedBox(height: 10),
 
-          StreamBuilder<Duration>(
-            stream: widget.audio.positionStream,
-            builder: (context, snapshot) {
-              final pos = snapshot.data ?? Duration.zero;
-              final dur = widget.audio.duration ?? Duration.zero;
 
-              return Text(
-                "${formatDuraton(pos)}/${formatDuraton(dur)}",
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 18,
-                ),
-              );
-            },
-          ),
           IconButton(onPressed: ()=>Navigator.push(context, MaterialPageRoute(builder: (context)=>Queue())), icon: Icon(Icons.queue)),
         ],
       ),

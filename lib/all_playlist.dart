@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:simplemp3pkayer/Database.dart';
+import 'Database.dart';
 import 'openPlaylistPage.dart';
 
 
@@ -13,17 +13,17 @@ class allPlaylist extends StatefulWidget{
 
 class _allPlaylistState extends State<allPlaylist>{
 
-  final db = playlistManager();
+  final db = songDatabase();
   
-  Future<void> openAPLaylists(PlayList p, int id)async{
-    await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(playList: p,id: id,)));
+  Future<void> openAPLaylists(int id)async{
+    await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
   }
 
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    db.load();
+    db.loadPlaylists();
 
   }
 
@@ -37,7 +37,7 @@ class _allPlaylistState extends State<allPlaylist>{
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<List<PlayList>>(
-          stream: db.playStream,
+          stream: db.playlistStream,
           initialData: const[],
           builder: (context, snapshot){
               final playlists = snapshot.data!;
@@ -54,7 +54,7 @@ class _allPlaylistState extends State<allPlaylist>{
                     final playlist = playlists[index];
                     return Card(
                       child: InkWell(
-                        onTap: ()=>openAPLaylists(playlist, index),
+                        onTap: ()=>openAPLaylists(playlist.id!),
                         child: Column(
                           mainAxisAlignment: .center,
                           children: [

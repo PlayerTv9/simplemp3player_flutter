@@ -10,14 +10,14 @@ class addAPlaylist extends StatefulWidget{
 }
 
 class _addPlaylistState extends State<addAPlaylist>{
-  final f = playlistManager();
+  final db = songDatabase();
   final textEditing = TextEditingController();
   final d = songDatabase();
 
   Future<void> addAPlaylist()async{
     if (textEditing.text.isNotEmpty){
-      final p = PlayList(name: textEditing.text, songs: [], id: await f.createANewId());
-      await f.saveNewplayList(p);
+      final p = PlayList(name: textEditing.text, songs: [], img: "");
+      await db.addAPlaylist(p);
     }
 
   }
@@ -28,12 +28,12 @@ class _addPlaylistState extends State<addAPlaylist>{
   void initState() {
     // TODO: implement initState
     super.initState();
-    f.load();
+    db.loadPlaylists();
   }
 
-  Future<void> showSongsIntoAPLaylist(int pos)async{
-    final pls = await f.loadPlaylist();
-    final p = pls[pos];
+  Future<void> showSongsIntoAPLaylist(int id)async{
+    final p = await db.getAPlaylistById(id);
+
     final songs = await d.getSongsById(p.songs);
     songs.forEach((s)=> print(s.Name));
 
@@ -52,14 +52,15 @@ class _addPlaylistState extends State<addAPlaylist>{
       body: Column(
         mainAxisAlignment: .center,
         children: [
-          StreamBuilder(stream: f.playStream,
+          StreamBuilder<List<PlayList>>(stream: db.playlistStream,
               initialData: [],
 
               builder: (context, snapshot){
               final playlist = snapshot.data!;
               return Column(
                 children: List.generate(playlist.length, (i){
-                  return TextButton(onPressed:()=>showSongsIntoAPLaylist(i) , child: Text(playlist[i].name));
+                  final p = playlist[i];
+                  return TextButton(onPressed:()=>showSongsIntoAPLaylist(p.id!) , child: Text(playlist[i].name));
                 }),
               );
               }),

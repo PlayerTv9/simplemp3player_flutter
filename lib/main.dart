@@ -6,6 +6,9 @@ import 'package:metadata_god/src/rust/frb_generated.dart';
 import 'package:on_audio_query_pluse/on_audio_query.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:app_links/app_links.dart';
+import 'package:flutter/services.dart';
+import 'package:uri_content/uri_content.dart';
 import 'dart:io';
 
 
@@ -28,9 +31,87 @@ void main() async{
     androidNotificationOngoing: true
   );
 
+  await initIncomingAudioFiles();
+
 
 
   runApp(const MyApp());
+}
+
+Future<void> initIncomingAudioFiles()async{
+  final appLinks = AppLinks();
+  appLinks.getInitialLink().then((uri)async{
+    if(uri != null){
+      await playExternalFile(uri);
+    }
+  });
+  appLinks.uriLinkStream.listen((uri)async{
+    await playExternalFile(uri);
+  });
+}
+
+Future<void> playExternalFile(Uri filePath)async{
+  final pl = PlayerManager();
+  IOSink? outputStream;
+  print("Path importato: $filePath");
+  try{
+
+    //final newSOng = Song(Name: filePath.pathSegments.last, path: "", duration: 0);
+
+
+    /*final audioSource = AudioSource.uri(filePath,tag: MediaItem(
+          id: filePath.toString(),
+          title: filePath.pathSegments.last,
+          artist: "Autore sconosciuto",
+          album: "--",
+          duration: Duration(milliseconds: 0),
+
+      )
+
+      );
+
+      await pl.player.addAudioSource(audioSource);*/
+
+    final uriContent = UriContent();
+
+    final tempDir = await getTemporaryDirectory();
+
+    final trackName = filePath.pathSegments.last.isNotEmpty ? filePath.pathSegments.last : "Audio Esterno";
+
+    String path = "${tempDir.path}/$trackName.mp3";
+    File tempFile = File(path);
+
+    Stream<List<int>> inputStream = uriContent.getContentStream(filePath);
+
+    outputStream = tempFile.openWrite();
+
+    await for(final chunk in inputStream){
+      outputStream.add(Uint8List.fromList(chunk));
+    }
+
+    await outputStream.flush();
+    await outputStream.close();
+
+    final checksum = await calculateChecksum(tempFile.path);
+
+
+    final newSong = Song(Name: trackName, path: tempFile.path, duration: 0, checkSum: checksum);
+
+
+    await pl.addASongsToQueue([newSong]);
+
+
+
+
+
+
+
+
+  }catch(e){
+    outputStream?.close();
+    print("Errore apertura del file $e");
+  }
+
 }
 
 
@@ -105,7 +186,8 @@ class _MyHomePageState extends State<MyHomePage> {
   bool isEspanded = false;
   final player = AudioPlayer();
   final db = songDatabase();
-  final f = playlistManager();
+  //final f = playlistManager();
+
 
   final OnAudioQuery audioQuery = OnAudioQuery();
 
@@ -136,12 +218,14 @@ class _MyHomePageState extends State<MyHomePage> {
       final audioSource = AudioSource.file(newFile.path);
       print("Path first,path: ${newFile.path}");
 
+      final checkSum = await calculateChecksum(newFile.path);
+
 
 
 
 
       //if(await db.isSongNotInserted(result.names[0]!)){
-        final nSong = Song(Name: result.names[0]!, path: newFile.path,duration: 0);
+        final nSong = Song(Name: result.names[0]!, path: newFile.path,duration: 0, checkSum: checkSum);
         await db.insert(nSong);
         pl.queueSongs.add(nSong);
 
@@ -182,7 +266,7 @@ class _MyHomePageState extends State<MyHomePage> {
     await Navigator.push(context, MaterialPageRoute(builder: (_)=>addAPlaylist(title: "add A PLayist")));
   }
   Future<void> showPlaylistSelector(int songId)async{
-    final playlists = await f.loadPlaylist();
+    final playlists = await db.getAllPlaylists();
     if(!mounted)return;
     showModalBottomSheet(context: context, builder: (context){
       return ListView.builder(
@@ -193,7 +277,7 @@ class _MyHomePageState extends State<MyHomePage> {
           return ListTile(
             title: Text(playlist.name),
             onTap: ()async{
-              await f.addSongToPlaylist(playlist.name, songId);
+              await db.addASongToAPlaylist(playlist.id!, songId);
               Navigator.pop(context);
             },
 
@@ -259,16 +343,22 @@ class _MyHomePageState extends State<MyHomePage> {
     final songs = await audioQuery.querySongs();
     print("Numero di canzoni: ${songs.length}");
 
-    final songsType = songs.map((s) => Song(Name: s.title, path: s.data, duration: s.duration ?? 0)).toList();
+    final songsType = await Future.wait(songs.map((s)async{
+      return Song(Name: s.title, path: s.data, duration: s.duration ?? 0, checkSum: await calculateChecksum(s.data));
+    }));
     for(final s in songsType){
-      print("Canzone con nome ${s.Name}! e path ${s.path}");
-      if(await db.isSongNotInserted(s.Name)){
+      print(s.toString());
+      if(await db.isSongNotInserted(s.checkSum)){
         await db.insert(s);
       }
     }
 
 
   }
+
+
+
+
 
 
   
@@ -278,6 +368,7 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     //getSOngsIntoPhone();
     db.loadSong();
+    initIncomingAudioFiles();
 
 
   }

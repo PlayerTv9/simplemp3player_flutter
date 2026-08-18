@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:simplemp3pkayer/Widgets_player.dart';
 
+import 'Widgets_player.dart';
 import 'Database.dart';
 
 Widget image(Metadata? metadati){
@@ -81,9 +81,9 @@ Widget songWidget(Song s, int? index){
 }
 
 Future<void> showPlaylistSelector(int songId, BuildContext context)async{
-  final pl = playlistManager();
+  //final pl = playlistManager();
   final dbSong = songDatabase();
-  final playlists = await pl.loadPlaylist();
+  final playlists = await dbSong.getAllPlaylists();
   if(!context.mounted)return;
   showModalBottomSheet(context: context, builder: (context){
     return ListView.builder(
@@ -94,7 +94,7 @@ Future<void> showPlaylistSelector(int songId, BuildContext context)async{
           return ListTile(
             title: Text(playlist.name),
             onTap: ()async{
-              await pl.addSongToPlaylist(playlist.name, songId);
+              await dbSong.addASongToAPlaylist(playlist.id!, songId);
               Navigator.pop(context);
             },
 
@@ -109,9 +109,10 @@ Future<void> showPlaylistSelector(int songId, BuildContext context)async{
 enum menuType{
   normal,
   queue,
+  Playlist
 }
 
-void songMenu(BuildContext context, Song s, {menuType type = menuType.normal, int index=-1}){
+void songMenu(BuildContext context, Song s, {menuType type = menuType.normal, int index=-1, int pId = -1}){
   final pl = PlayerManager();
   final dbSong = songDatabase();
   showModalBottomSheet(context: context, builder: (context){
@@ -145,7 +146,7 @@ void songMenu(BuildContext context, Song s, {menuType type = menuType.normal, in
             Navigator.pop(context);
           },
         ),
-        menuAdded(context, index, type),
+        menuAdded(context, index, type, pId, s.id!),
 
 
       ],
@@ -153,7 +154,7 @@ void songMenu(BuildContext context, Song s, {menuType type = menuType.normal, in
   });
 }
 
-Widget menuAdded(BuildContext context, int index, menuType tipo){
+Widget menuAdded(BuildContext context, int index, menuType tipo, int pId, int songId){
   if(tipo==menuType.queue){
     return ListTile(
       leading: const Icon(Icons.remove_from_queue),
@@ -162,6 +163,17 @@ Widget menuAdded(BuildContext context, int index, menuType tipo){
         Navigator.pop(context);
         final pl = PlayerManager();
         await pl.removeSongAt(index);
+
+      },
+    );
+  }else if(tipo == menuType.Playlist){
+    return ListTile(
+      leading: const Icon(Icons.remove),
+      title: const Text("Rimuovi dalla playlist"),
+      onTap: ()async{
+        Navigator.pop(context);
+        final db = songDatabase();
+        await db.removeASongFromAPlaylist(pId, songId);
 
       },
     );
