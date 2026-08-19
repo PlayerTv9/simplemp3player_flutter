@@ -125,7 +125,7 @@ Widget playlistsWidget(){
 
                   return Card(
                       child: InkWell(
-                        onTap: ()=>openAPLaylists(playlistSearched[index], correctIndex),
+                        onTap: ()=>openAPLaylists(playlistSearched[index], playlist.id!),
                         child: Column(
                           mainAxisAlignment: .center,
                           children: [

@@ -189,7 +189,7 @@ class _MyHomePageState extends State<MyHomePage> {
   //final f = playlistManager();
 
 
-  final OnAudioQuery audioQuery = OnAudioQuery();
+
 
 
   PlayerManager pl = PlayerManager();
@@ -198,57 +198,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   //Song? s;
 
-  Future<void> pickAMusicFile ()async{
-    final result = await FilePicker.pickFiles(
-      type: FileType.audio,
-      allowMultiple: false,
-    );
-
-    if(result!=null){
-      final file = File(result.files.single.path!);
-
-      final dir = await getApplicationDocumentsDirectory();
-
-      final newFile = await file.copy(
-          "${dir.path}/${result.files.single.name}"
-      );
 
 
-      print(result.paths[0]);
-      final audioSource = AudioSource.file(newFile.path);
-      print("Path first,path: ${newFile.path}");
-
-      final checkSum = await calculateChecksum(newFile.path);
-
-
-
-
-
-      //if(await db.isSongNotInserted(result.names[0]!)){
-        final nSong = Song(Name: result.names[0]!, path: newFile.path,duration: 0, checkSum: checkSum);
-        await db.insert(nSong);
-        pl.queueSongs.add(nSong);
-
-        await pl.loadQueue(pl.queueSongs, pl.currentIndex);
-
-        setState(() {
-
-        });
-      //}
-
-
-    }
-    print(await db.getAllSongs());
-  }
-  void playAudio(){
-    if(pl.player.playing){
-      player.pause();
-    }else{
-      player.play();
-    }
-
-
-  }
   
   Future<void> selectASong(int id)async{
     final song = await db.getASongById(id);
@@ -262,9 +213,7 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  Future<void> addPlaylist()async{
-    await Navigator.push(context, MaterialPageRoute(builder: (_)=>addAPlaylist(title: "add A PLayist")));
-  }
+
   Future<void> showPlaylistSelector(int songId)async{
     final playlists = await db.getAllPlaylists();
     if(!mounted)return;
@@ -289,72 +238,9 @@ class _MyHomePageState extends State<MyHomePage> {
     
   }
 
-  Future<void> showAddMenu()async{
-    pl.queueSongs.forEach((f)=>print(f.Name));
-    showModalBottomSheet(context: context, builder: (context){
-      return SafeArea(child: Column(
-        mainAxisSize: .min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.music_note),
-            title: const Text("Agiungi canzone"),
-            onTap: (){
-              Navigator.pop(context);
-              pickAMusicFile();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.album),
-            title: const Text("Aggiungi playlist"),
-            onTap: (){
-              Navigator.pop(context);
-              addPlaylist();
-            },
-
-          ),
-          ListTile(
-            leading: const Icon(Icons.library_music),
-            title: const Text("Sincoranizza con la cartella 'music' del dispositivo"),
-            onTap: (){
-              Navigator.pop(context);
-              getSOngsIntoPhone();
-            },
-          )
-        ],
-      ));
-    });
-  }
-
-  Future<void> getSOngsIntoPhone()async{
 
 
-    bool permission = await audioQuery.permissionsRequest();
-    print("Richiesta permesso audioQuery: $permission}");
-    bool status = await audioQuery.permissionsStatus();
-    print("status audioQuery: $status}");
-    if(!status){
-      permission = await audioQuery.permissionsRequest();
-      print("Richiesta permesso audioQuery: $permission}");
-    }
-    status = await audioQuery.permissionsStatus();
-    print("status audioQuery: $status}");
-    if (!await audioQuery.permissionsStatus())return;
 
-    final songs = await audioQuery.querySongs();
-    print("Numero di canzoni: ${songs.length}");
-
-    final songsType = await Future.wait(songs.map((s)async{
-      return Song(Name: s.title, path: s.data, duration: s.duration ?? 0, checkSum: await calculateChecksum(s.data));
-    }));
-    for(final s in songsType){
-      print(s.toString());
-      if(await db.isSongNotInserted(s.checkSum)){
-        await db.insert(s);
-      }
-    }
-
-
-  }
 
 
 
@@ -368,7 +254,8 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     //getSOngsIntoPhone();
     db.loadSong();
-    initIncomingAudioFiles();
+    db.loadPlaylists();
+    //initIncomingAudioFiles();
 
 
   }
@@ -387,32 +274,7 @@ class _MyHomePageState extends State<MyHomePage> {
       body: Stack(
 
         children: [
-          /*Column(
-            children: [
-              TextButton(onPressed: addPlaylist, child: const Text("Agggiungi playlist")),
-            ],
-          ),*/
-          StreamBuilder(
-              stream: db.songStream,
-              initialData: const[],
-              builder: (context, snapshot){
-                final songs = snapshot.data!;
-                return Column(
-                  children: List.generate(songs.length, (i){
-                    return Row(
-                      children: [
-                        TextButton(onPressed: (){
-                          selectASong(songs[i].id);
-                          print("Path: ${songs[i].path}");
-
-                        }, child: Text("${songs[i].Name} Durata: ${songs[i].duration~/60000}:${(songs[i].duration%60000)}")),
-                        IconButton(onPressed: ()=>showPlaylistSelector(songs[i].id), icon: Icon(Icons.playlist_add)),
-  
-                    ],
-                    );
-                  }),
-                );
-              }),
+          const Text("Prova!!"),
 
           Align(
             alignment: Alignment.bottomCenter,
@@ -424,11 +286,7 @@ class _MyHomePageState extends State<MyHomePage> {
           )
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: showAddMenu,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+
     );
   }
 }

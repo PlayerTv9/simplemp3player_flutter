@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'allSongsPage.dart';
 import 'Database.dart';
 import 'openPlaylistPage.dart';
+import 'addAPlaylits.dart';
 
 
 class allPlaylist extends StatefulWidget{
@@ -17,6 +19,10 @@ class _allPlaylistState extends State<allPlaylist>{
   
   Future<void> openAPLaylists(int id)async{
     await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
+  }
+
+  Future<void> addPlaylist()async{
+    await Navigator.push(context, MaterialPageRoute(builder: (_)=>addAPlaylist(title: "add A PLayist")));
   }
 
   @override
@@ -43,7 +49,7 @@ class _allPlaylistState extends State<allPlaylist>{
               final playlists = snapshot.data!;
               return GridView.builder(
                   padding: const EdgeInsets.all(12),
-                  itemCount: playlists.length,
+                  itemCount: playlists.length+1,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                     crossAxisSpacing: 12,
@@ -51,7 +57,33 @@ class _allPlaylistState extends State<allPlaylist>{
                     childAspectRatio: 1,
                   ),
                   itemBuilder: (context, index){
-                    final playlist = playlists[index];
+                    if(index==0){
+                      return Card(
+                        color: Colors.blueAccent,
+                        child: InkWell(
+                          onTap: ()async{
+                            await Navigator.push(context,
+                                MaterialPageRoute(builder: (_)=>allSongPage()));
+                          },
+                          child: Column(
+                            mainAxisAlignment: .center,
+                            children: [
+                              Icon(
+                                Icons.library_music,
+                                size: 60,
+                              ),
+                              const SizedBox(height: 8,),
+                              Text(
+                                "Tutte le canzoni",
+                                textAlign: TextAlign.center,
+                              )
+                            ],
+                          ),
+                        ),
+                      );
+
+                    }
+                    final playlist = playlists[index-1];
                     return Card(
                       child: InkWell(
                         onTap: ()=>openAPLaylists(playlist.id!),
@@ -72,7 +104,14 @@ class _allPlaylistState extends State<allPlaylist>{
                       ),
                     );
                   });
-          }));
+          }),
+      floatingActionButton: FloatingActionButton(
+        onPressed: addPlaylist,
+        tooltip: 'Increment',
+        child: const Icon(Icons.add),
+      ),
+
+    );
 
 
   }
