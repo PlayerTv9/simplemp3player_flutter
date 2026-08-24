@@ -146,6 +146,16 @@ void songMenu(BuildContext context, Song s, {menuType type = menuType.normal, in
             Navigator.pop(context);
           },
         ),
+        ListTile(
+          leading:s.isInFavorites ? const Icon(Icons.favorite) : const Icon(Icons.favorite_border),
+          title:const Text("Aggiungi/togli ai favoriti"),
+          onTap: ()async{
+            final song = s.changeFavorites(!s.isInFavorites);
+            await dbSong.update(song);
+            Navigator.pop(context);
+          },
+        ),
+
         menuAdded(context, index, type, pId, s.id!),
 
 

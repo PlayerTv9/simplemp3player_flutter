@@ -15,7 +15,8 @@ class Song{
   final String path;
   final int duration;
   final String checkSum;
-  const Song({required this.Name, required this.path,required this.duration,  required this.checkSum, this.id});
+  final bool isInFavorites;
+  const Song({required this.Name, required this.path,required this.duration,  required this.checkSum,this.isInFavorites=false, this.id,});
 
   Map<String, Object> toDict(){
     return {
@@ -23,17 +24,23 @@ class Song{
       "checksum": checkSum,
       "path": path,
       "duration": duration,
+      "isInFavorites": !isInFavorites ? 0 : 1
 
     };
   }
   factory Song.fromDict(Map<String, Object?> m){
-    return Song(Name: m["name"] as String, path: m["path"] as String,checkSum: m["checksum"] as String, id: m["id"] as int, duration:  m["duration"] as int );
+    return Song(Name: m["name"] as String, path: m["path"] as String,checkSum: m["checksum"] as String, id: m["id"] as int, duration:  m["duration"] as int,
+        isInFavorites: (m["isInFavorites"] as int == 0 ? false : true) );
+  }
+
+  Song changeFavorites(bool value){
+    return Song(Name: Name, path: path, duration: duration, checkSum: checkSum, id: id, isInFavorites: value);
   }
 
   @override
   String toString() {
     // TODO: implement toString
-    return "Nome: $Name, path: $path, duration: $duration, checksum: $checkSum";
+    return "Nome: $Name, path: $path, duration: $duration, checksum: $checkSum, isFavorites: $isInFavorites";
   }
 }
 
@@ -72,7 +79,8 @@ class songDatabase{
         name TEXT,
         path TEXT,
         checksum TEXT,
-        duration INTEGER
+        duration INTEGER,
+        isInFavorites INTEGER
       );
      
       
@@ -82,7 +90,8 @@ class songDatabase{
         id INTEGER PRIMARY KEY,
         name TEXT,
         songs TEXT,
-        img TEXT
+        img TEXT,
+        isPinned INTEGER
       );
       
       ''');
@@ -118,10 +127,12 @@ class songDatabase{
   }
 
   Future<List<Song>> getSongsById(List<int> ids)async{
-    final allS = await getAllSongs();
-    return allS
-          .where((s)=>ids.contains(s.id))
-          .toList();
+    List<Song> songs = [];
+    for(final id in ids){
+      final s = await getASongById(id);
+      if(s!=null) songs.add(s);
+    }
+    return songs;
   }
 
   Future<List<PlayList>> getAllPlaylists()async{
@@ -166,6 +177,11 @@ class songDatabase{
     await updateAPlaylist(newP);
   }
 
+  Future<List<Song>> getAllFavoritesSongs()async{
+    final m = await db.query(tableName, where: "isInFavorites = ?", whereArgs: [1]);
+    return m.map((m)=>Song.fromDict(m)).toList();
+  }
+
 
 
 
@@ -177,13 +193,15 @@ class PlayList{
   final List<int> songs;
   final String? img;
   final int? id;
+  final bool isPinned;
 
-  const PlayList({required this.name, required this.songs, this.id, this.img});
+  const PlayList({required this.name, required this.songs,this.isPinned=false, this.id, this.img});
   Map<String, dynamic> toJson(){
     return {
       'name': name,
       'songs': songs.join(','),
       'img': img,
+      "isPinned": !isPinned ? 0 : 1
     };
   }
 
@@ -191,115 +209,13 @@ class PlayList{
 	final songsString = json['songs'] as String;
     return PlayList(name: json['name'] as String,
         songs:songsString.isEmpty ? [] :  songsString.split(',').map((i)=>int.parse(i)).toList(),
-        id: json['id'] as int, img: json['img'] as String?);
+        id: json['id'] as int, img: json['img'] as String?, isPinned: json["isPinned"] as int == 0 ? false : true);
   }
 
 
 }
 
-/*class playlistManager{
-  playlistManager._();
-  static final playlistManager pl = playlistManager._();
-  factory playlistManager(){
-    return pl;
-  }
 
-  final StreamController<List<PlayList>> _controller = StreamController<List<PlayList>>.broadcast();
-
-  Future<void> load()async{
-    final data = await loadPlaylist();
-    _controller.add(data);
-  }
-
-  Stream<List<PlayList>> get playStream => _controller.stream;
-
-
-  Future<File> getFileName()async{
-    final dir = await getApplicationDocumentsDirectory();
-    return File("${dir.path}/playlists.json");
-  }
-
-  Future<List<PlayList>> loadPlaylist()async{
-    final file = await getFileName();
-    if(!await file.exists()) return[];
-
-    final content = await file.readAsString();
-    final List<dynamic> json = jsonDecode(content);
-    return json.map((e)=>PlayList.fromJson(e)).toList();
-  }
-
-  Future<void> saveNewplayList(PlayList p)async{
-      final file = await getFileName();
-      final playlists = await loadPlaylist();
-      playlists.add(p);
-
-      await file.writeAsString(jsonEncode(
-          playlists.map((p)=>p.toJson()).toList()
-      ));
-      load();
-  }
-
-  Future<void> updateAPlayList(int id, PlayList p)async{
-    final file = await getFileName();
-    final playlists = await loadPlaylist();
-    playlists[id] = p;
-    await file.writeAsString(jsonEncode(
-        playlists.map((p)=>p.toJson()).toList()
-    ));
-    load();
-  }
-  Future<PlayList> deleteAPLaylist(int id)async{
-    final file = await getFileName();
-    final playlists = await loadPlaylist();
-    final p = playlists[id];
-    playlists.removeAt(id);
-    await file.writeAsString(jsonEncode(
-        playlists.map((p)=>p.toJson()).toList()
-    ));
-    load();
-    return p;
-  }
-  Future<void> removeASongFromAPLaylist(String playlistName, int songId)async{
-    final playlists = await loadPlaylist();
-    final i = playlists.indexWhere((p)=>p.name==playlistName);
-    if(i==-1)return;
-
-    final playlist = playlists[i];
-    if(playlist.songs.contains(songId)){
-      playlist.songs.remove(songId);
-      await updateAPlayList(i, playlist);
-    }
-  }
-  Future<void> addSongToPlaylist(String playlistName, int songId)async{
-    final playlists = await loadPlaylist();
-    final i = playlists.indexWhere((p)=>p.name==playlistName);
-    if (i==-1)return;
-
-    final playlist = playlists[i];
-    if(!playlist.songs.contains(songId)){
-        final newP = PlayList(name: playlist.name, songs: [...playlist.songs, songId],id:playlist.id, img: playlist.img);
-        await updateAPlayList(i,newP);
-      }
-    }
-
-    Future<int> createANewId()async{
-      int id = 0;
-
-      while(await isIdAlreadyUsed(id)) {
-        id++;
-      }
-
-      return id;
-    }
-
-    Future<bool> isIdAlreadyUsed(int id)async{
-      final ids = (await loadPlaylist()).map((p) => p.id).toList();
-      return ids.contains(id);
-      
-      
-    }
-
-}*/
 
 Future<String> calculateChecksum(String filePath)async{
   final file = File(filePath);

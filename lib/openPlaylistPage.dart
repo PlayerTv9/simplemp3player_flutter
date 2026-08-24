@@ -4,6 +4,7 @@ import 'package:metadata_god/metadata_god.dart';
 import 'Widgets_player.dart';
 import 'Database.dart';
 import 'songWidget.dart';
+import 'modifyPlaylistPage.dart';
 
 class openPlayListPage extends StatefulWidget{
   final int? id;
@@ -94,6 +95,16 @@ class _openPlaylistState extends State<openPlayListPage>{
     return Scaffold(
       appBar: AppBar(
         title: Text(playList?.name ?? "Nessuna playlist selezionata"),
+        actions: [
+          TextButton.icon(
+              onPressed: ()async{
+                await Navigator.push(context, MaterialPageRoute(builder: (_)=>modifyPlaylistPage(id: widget.id,)));
+              },
+              label: const Text("Modifica la playlist"),
+              icon: const Icon(Icons.mode_edit_outline_outlined),
+          )
+        ],
+
 
       ),
       body: Stack(

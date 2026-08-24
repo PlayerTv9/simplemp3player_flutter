@@ -3,6 +3,7 @@ import 'allSongsPage.dart';
 import 'Database.dart';
 import 'openPlaylistPage.dart';
 import 'addAPlaylits.dart';
+import 'FavoritesSong.dart';
 
 
 class allPlaylist extends StatefulWidget{
@@ -49,7 +50,7 @@ class _allPlaylistState extends State<allPlaylist>{
               final playlists = snapshot.data!;
               return GridView.builder(
                   padding: const EdgeInsets.all(12),
-                  itemCount: playlists.length+1,
+                  itemCount: playlists.length+2,
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                     crossAxisSpacing: 12,
@@ -83,7 +84,32 @@ class _allPlaylistState extends State<allPlaylist>{
                       );
 
                     }
-                    final playlist = playlists[index-1];
+                    if(index == 1){
+                      return Card(
+                        color: Colors.redAccent,
+                        child: InkWell(
+                          onTap: ()async{
+                            await Navigator.push(context,
+                                MaterialPageRoute(builder: (_)=>FavoritesSong()));
+                          },
+                          child: Column(
+                            mainAxisAlignment: .center,
+                            children: [
+                              Icon(
+                                Icons.favorite_rounded,
+                                size: 60,
+                              ),
+                              const SizedBox(height: 8,),
+                              Text(
+                                "Canzoni preferite",
+                                textAlign: TextAlign.center,
+                              )
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                    final playlist = playlists[index-2];
                     return Card(
                       child: InkWell(
                         onTap: ()=>openAPLaylists(playlist.id!),
