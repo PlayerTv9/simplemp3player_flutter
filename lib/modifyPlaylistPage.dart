@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:simplemp3pkayer/openPlaylistPage.dart';
 import 'Widgets_player.dart';
@@ -24,6 +27,9 @@ class _modifyPlaylistPageState extends State<modifyPlaylistPage>{
   final controller = TextEditingController();
   List<int> songsIds = [];
   List<Song> songs = [];
+  String btnText = "Cambia/aggiungi copertina";
+  String? pathImg;
+  String? oldPathImg;
 
 
 
@@ -51,41 +57,6 @@ class _modifyPlaylistPageState extends State<modifyPlaylistPage>{
   }
 
 
-  /*Widget getSongsInsideAPlaylist(PlayList? p){
-    if(p != null){
-      return FutureBuilder(future: db.getSongsById(p.songs), builder: (context, snapshot){
-        if(snapshot.connectionState == ConnectionState.waiting)return CircularProgressIndicator();
-        if(!snapshot.hasData || snapshot.data!.isEmpty){
-          return const Text("La playlist è ancora vuota!");
-        }
-        if(snapshot.hasError){
-          return Text(snapshot.error.toString());
-        }
-        final songs = snapshot.data!;
-        return Column(
-          children: [
-        ReorderableListView.builder(
-        itemCount: songs.length,
-          itemBuilder: (context, index){
-            return songWidget(songs[index], index);
-          },
-            onReorder:(oldIndex,newIndex){
-              if(oldIndex<0 || oldIndex>=p.songs.length) return;
-              if(newIndex<0 || newIndex>=p.songs.length)return;
-              final id = songsIds.removeAt(oldIndex);
-              songsIds.insert(newIndex, id);
-              
-              
-            } ,
-        )
-          ],
-        );
-       
-      });
-    }
-    return const Text("Nessuna playlist inserita!");
-
-  }*/
 
 
 
@@ -96,6 +67,8 @@ class _modifyPlaylistPageState extends State<modifyPlaylistPage>{
       controller.text = playList!.name;
       songsIds = List.from(playList!.songs);
       songs = await db.getSongsById(songsIds);
+      oldPathImg = playList!.img;
+
 
       if(mounted){
         setState(() {
@@ -106,6 +79,27 @@ class _modifyPlaylistPageState extends State<modifyPlaylistPage>{
 
 
   }
+
+  Future<String?> getImgPath()async{
+
+    if(pathImg != null){
+      final file = File(pathImg!);
+      if(pathImg != "" && await file.exists()){
+        if(oldPathImg != null && oldPathImg != ""){
+          final oldFile = File(oldPathImg!);
+          if(await oldFile.exists()){
+            await oldFile.delete();
+          }
+        }
+        return pathImg;
+      }
+    }
+    return oldPathImg;
+
+
+
+  }
+
   @override
   void initState() {
     // TODO: implement initState
@@ -144,7 +138,25 @@ class _modifyPlaylistPageState extends State<modifyPlaylistPage>{
               ),
               ),
               const SizedBox(width: 10,),
-              TextButton(onPressed: ()=>{}, child: const Text("Cambia copertina"))
+              TextButton.icon(onPressed: ()async{
+                final file = await FilePicker.pickFiles(
+                    type: FileType.image,
+                    allowMultiple: false
+                );
+                if(file != null && file.files.single.path != null){
+                  final originalFile = File(file.files.single.path!);
+
+                  final appDir = await getApplicationDocumentsDirectory();
+                  final fileName = "playlist_${DateTime.now().millisecondsSinceEpoch}.${file.files.single.extension}";
+                  final savedImage = await originalFile.copy("${appDir.path}/$fileName");
+
+                  setState(() {
+                    pathImg = savedImage.path;
+                    btnText = file.files.single.name;
+                  });
+                  print("path img salvata: ${pathImg}");
+                }
+              }, label: Text(btnText), icon: const Icon(Icons.image),)
             ],
             ),
           ),
@@ -164,7 +176,8 @@ class _modifyPlaylistPageState extends State<modifyPlaylistPage>{
       floatingActionButton: FloatingActionButton(
         onPressed: ()async {
           if(playList == null)return;
-          final newP = PlayList(name: controller.text, songs: songsIds, img: playList!.img, id: playList!.id, isPinned: playList!.isPinned);
+          final img = await getImgPath();
+          final newP = PlayList(name: controller.text, songs: songsIds, img: img, id: playList!.id, isPinned: playList!.isPinned);
           await db.updateAPlaylist(newP);
           await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: playList!.id!,)));
         },

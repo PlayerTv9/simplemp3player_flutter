@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import 'allSongsPage.dart';
 import 'Database.dart';
 import 'openPlaylistPage.dart';
@@ -24,6 +25,26 @@ class _allPlaylistState extends State<allPlaylist>{
 
   Future<void> addPlaylist()async{
     await Navigator.push(context, MaterialPageRoute(builder: (_)=>addAPlaylist(title: "add A PLayist")));
+  }
+
+  Widget coverImage(String path){
+    final file = File(path);
+    if(path != "" && file.existsSync()){
+      return ClipRRect(
+        borderRadius: .circular(16),
+        child: Image.memory(
+          file.readAsBytesSync(),
+          width: 60,
+          height: 60,
+          fit: .cover,
+        )
+      );
+    }else{
+      return Icon(
+        Icons.queue_music,
+        size: 60,
+      );
+    }
   }
 
   @override
@@ -116,10 +137,7 @@ class _allPlaylistState extends State<allPlaylist>{
                         child: Column(
                           mainAxisAlignment: .center,
                           children: [
-                            Icon(
-                              Icons.queue_music,
-                              size: 60,
-                            ),
+                            coverImage(playlist.img ?? ""),
                             const SizedBox(height: 8,),
                             Text(
                               playlist.name,

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'Database.dart';
 
 class addAPlaylist extends StatefulWidget{
@@ -13,10 +16,12 @@ class _addPlaylistState extends State<addAPlaylist>{
   final db = songDatabase();
   final textEditing = TextEditingController();
   final d = songDatabase();
+  String btnText = "Seleziona un'immagine da mettere come copertina dell'album";
+  String pathImg = "";
 
   Future<void> addAPlaylist()async{
     if (textEditing.text.isNotEmpty){
-      final p = PlayList(name: textEditing.text, songs: [], img: "");
+      final p = PlayList(name: textEditing.text, songs: [], img: pathImg);
       await db.addAPlaylist(p);
     }
 
@@ -70,7 +75,29 @@ class _addPlaylistState extends State<addAPlaylist>{
               decoration: InputDecoration(
                 labelText: "Inserisci il titolo della playlist"
               ),
-          ),)
+          ),),
+          Padding(padding: const EdgeInsets.all(10),
+            child: TextButton.icon(onPressed: ()async{
+              final file = await FilePicker.pickFiles(
+                type: FileType.image,
+                allowMultiple: false
+              );
+              if(file != null && file.files.single.path != null){
+                final originalFile = File(file.files.single.path!);
+
+                final appDir = await getApplicationDocumentsDirectory();
+                final fileName = "playlist_${DateTime.now().millisecondsSinceEpoch}.${file.files.single.extension}";
+                final savedImage = await originalFile.copy("${appDir.path}/$fileName");
+
+                setState(() {
+                  pathImg = savedImage.path;
+                  btnText = file.files.single.name;
+                });
+                print("path img salvata: ${pathImg}");
+              }
+
+            }, label: Text(btnText), icon: Icon(Icons.image),),
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
