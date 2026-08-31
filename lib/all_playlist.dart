@@ -5,6 +5,7 @@ import 'Database.dart';
 import 'openPlaylistPage.dart';
 import 'addAPlaylits.dart';
 import 'FavoritesSong.dart';
+import 'playlistMenu.dart';
 
 
 class allPlaylist extends StatefulWidget{
@@ -145,6 +146,9 @@ class _allPlaylistState extends State<allPlaylist>{
                             )
                           ],
                         ),
+                        onLongPress: (){
+                          playlistMenu(context, playlist);
+                        },
                       ),
                     );
                   });

@@ -23,6 +23,9 @@ class allSongsState extends State<allSongPage>{
 
   final OnAudioQuery audioQuery = OnAudioQuery();
 
+  double sliderValue = 0.0;
+  bool isSyncing = false;
+
   Future<void> pickAMusicFile ()async{
     final result = await FilePicker.pickFiles(
       type: FileType.audio,
@@ -84,14 +87,34 @@ class allSongsState extends State<allSongPage>{
     final songs = await audioQuery.querySongs();
     print("Numero di canzoni: ${songs.length}");
 
+    setState(() {
+      isSyncing = true;
+      sliderValue = 0.0;
+
+    });
+
     final songsType = await Future.wait(songs.map((s)async{
       return Song(Name: s.title, path: s.data, duration: s.duration ?? 0, checkSum: await calculateChecksum(s.data));
     }));
+    int i = 0;
     for(final s in songsType){
       print(s.toString());
       if(await db.isSongNotInserted(s.checkSum)){
         await db.insert(s);
       }
+      i++;
+      if(mounted){
+        setState(() {
+          sliderValue = (i/songs.length);
+        });
+      }
+
+    }
+
+    if(mounted){
+      setState(() {
+        isSyncing = false;
+      });
     }
 
 
@@ -143,25 +166,19 @@ class allSongsState extends State<allSongPage>{
           // -------------------------------------------------------------
           // 1. INSERISCI QUI LA ROBA CHE VUOI AGGIUNGERE SOPRA
           // -------------------------------------------------------------
-          Container(
-            padding: const EdgeInsets.all(16.0),
+
+          if(isSyncing)
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 16,vertical: 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    // Esempio: Riproduci casuale
-                  },
-                  icon: const Icon(Icons.shuffle),
-                  label: const Text("Riproduci Casuale"),
-                ),
-                Text(
-                  "Totale elementi",
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+                Expanded(child: LinearProgressIndicator(value: sliderValue,)),
+                const SizedBox(width: 12),
+                Text("${(sliderValue * 100).toInt()}%"),
               ],
             ),
-          ),
+            ),
+
+
 
           const Divider(height: 1), // Una linea di separazione facoltativa
 

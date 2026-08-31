@@ -3,6 +3,8 @@ import 'Widgets_player.dart';
 import 'Database.dart';
 import 'songWidget.dart';
 import 'openPlaylistPage.dart';
+import 'playlistMenu.dart';
+import 'dart:io';
 
 
 class searchPage extends StatefulWidget{
@@ -110,6 +112,26 @@ Future<void> openAPLaylists(PlayList p, int id)async{
   await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
 }
 
+Widget coverImage(String path){
+  final file = File(path);
+  if(path != "" && file.existsSync()){
+    return ClipRRect(
+        borderRadius: .circular(16),
+        child: Image.memory(
+          file.readAsBytesSync(),
+          width: 60,
+          height: 60,
+          fit: .cover,
+        )
+    );
+  }else{
+      return Icon(
+      Icons.queue_music,
+      size: 60,
+    );
+  }
+}
+
 Widget playlistsWidget(){
    if(isLoading){
      return CircularProgressIndicator();
@@ -129,10 +151,7 @@ Widget playlistsWidget(){
                         child: Column(
                           mainAxisAlignment: .center,
                           children: [
-                            Icon(
-                              Icons.queue_music,
-                              size: 60,
-                            ),
+                            coverImage(playlistSearched[index].img!),
                             const SizedBox(height: 8,),
                             Text(
                               playlist.name,
@@ -140,6 +159,9 @@ Widget playlistsWidget(){
                             )
                           ],
                         ),
+                        onLongPress: (){
+                          playlistMenu(context, playlistSearched[index]);
+                        },
                       ),
                     );
 
