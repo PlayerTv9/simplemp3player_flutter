@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:metadata_god/metadata_god.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:marquee/marquee.dart';
 
 import 'Widgets_player.dart';
 import 'Database.dart';
@@ -27,6 +28,40 @@ Widget image(Metadata? metadati){
     child: const Icon(
       Icons.music_note,
       size: 20,
+    ),
+  );
+}
+
+Widget songTitle(String title){
+  const style = TextStyle(
+      color: Colors.black,
+      fontSize: 16
+  );
+
+  const maxWidth = 180.0;
+  final painter = TextPainter(
+      text: TextSpan(text: title, style: style),
+      maxLines: 1,
+      textDirection: .ltr
+  )..layout();
+  if(painter.width<=maxWidth){
+    return SizedBox(
+      width: maxWidth,
+      child: Text(
+        title,
+        style: style,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+  return SizedBox(
+    width: maxWidth,
+    height: 20,
+    child: Marquee(text: title,
+      style: style,
+      velocity: 20,
+      blankSpace: 40,
+      pauseAfterRound: const Duration(seconds: 1),
     ),
   );
 }
@@ -65,9 +100,7 @@ Widget songWidget(Song s, int? index){
         return Row(
           children: [
             image(snapshot.data),
-            Text(snapshot.data?.title ?? s.Name, style: TextStyle(
-                fontSize: 16
-            ),),
+            songTitle(snapshot.data?.title ?? s.Name),
 
           ],
         );

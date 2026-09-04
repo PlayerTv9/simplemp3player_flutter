@@ -10,6 +10,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
 import 'package:uri_content/uri_content.dart';
 import 'dart:io';
+import 'dart:math';
 
 
 
@@ -17,7 +18,10 @@ import 'all_playlist.dart';
 import 'Widgets_player.dart';
 import 'Database.dart';
 import 'addAPlaylits.dart';
-import 'package:simplemp3pkayer/SearchPage.dart';
+import 'SearchPage.dart';
+import 'songWidget.dart';
+import 'openPlaylistPage.dart';
+import 'playlistMenu.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
@@ -186,6 +190,10 @@ class _MyHomePageState extends State<MyHomePage> {
   bool isEspanded = false;
   final player = AudioPlayer();
   final db = songDatabase();
+  final homeElementsUtility = recommadedELementsUtility();
+  List<int> songs = [];
+  List<int> playlists = [];
+  bool isLoading = true;
   //final f = playlistManager();
 
 
@@ -238,12 +246,58 @@ class _MyHomePageState extends State<MyHomePage> {
     
   }
 
+  Future<homeElements> getElements()async{
+    final el = await homeElementsUtility.loadElements();
+    if(el == null || el.time_record.difference(DateTime.now()) > Duration(days: 1)){
+      final allSongs = (await db.getAllSongs()).map((s)=>s.id!).toList();
+      final allPlaylists = (await db.getAllPlaylists()).map((p)=>p.id!).toList();
+      allSongs.shuffle(Random());
+      allPlaylists.shuffle(Random());
+      setState(() {
+        songs = allSongs.sublist(0,min(6,allSongs.length));
+        playlists = allPlaylists.sublist(0,min(6, allPlaylists.length));
+        isLoading = false;
+      });
 
+      final newHomeElem = homeElements(
+          recom_playlist: playlists,
+          recom_songs: songs,
+          time_record: DateTime.now());
+      await homeElementsUtility.saveElements(newHomeElem);
+      return newHomeElem;
 
+    }
+    setState(() {
+      songs = el.recom_songs;
+      playlists = el.recom_playlist;
+      isLoading = false;
+    });
+    return el;
+  }
 
+  Future<void> openAPLaylists(int id)async{
+    await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
+  }
 
-
-
+  Widget coverImage(String path){
+    final file = File(path);
+    if(path != "" && file.existsSync()){
+      return ClipRRect(
+          borderRadius: .circular(16),
+    child: Image.memory(
+    file.readAsBytesSync(),
+    width: 60,
+    height: 60,
+    fit: .cover,
+    )
+    );
+    }else{
+    return Icon(
+    Icons.queue_music,
+    size: 60,
+    );
+    }
+  }
 
 
 
@@ -255,6 +309,7 @@ class _MyHomePageState extends State<MyHomePage> {
     //getSOngsIntoPhone();
     db.loadSong();
     db.loadPlaylists();
+    getElements();
     //initIncomingAudioFiles();
 
 
@@ -271,21 +326,107 @@ class _MyHomePageState extends State<MyHomePage> {
 
         title: Text(widget.title),
       ),
-      body: Stack(
+      body: Column(
 
         children: [
-          const Text("Prova!!"),
+          if(isLoading)CircularProgressIndicator(),
+          Expanded(child:
+          FutureBuilder<List<Song>>(future: db.getSongsById(songs),
+              builder: (context, snapshot){
+                if(snapshot.connectionState == ConnectionState.waiting)return CircularProgressIndicator();
+                if(!snapshot.hasData || snapshot.data!.isEmpty){
+                  return const Text("La playlist è ancora vuota!");
+                }
+                if(snapshot.hasError){
+                  return Text(snapshot.error.toString());
+                }
+                final songsElements = snapshot.data!;
 
-          Align(
-            alignment: Alignment.bottomCenter,
+                return GridView.builder(
+                    padding: const EdgeInsets.all(12.0),
+                    itemCount: songsElements.length,
 
-            child: Padding(padding: const EdgeInsets.only(bottom: 80),
-            child: miniPlayer(audio: pl.player, expand: (){
-              Navigator.push(context, MaterialPageRoute(builder: (_)=>ExpandedPlayer(audio: pl.player, close: ()=>Navigator.pop(context),s:pl.currentSong)));
-            },s: pl.currentSong,),)
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 3,
+                    ),
+                    itemBuilder: (context, index){
+                      final song = songsElements[index];
+                      return InkWell(
+                        onTap: () async {
+                          pl.queueSongs.clear();
+                          pl.queueSongs.add(song);
+                          await pl.loadQueue(pl.queueSongs, 0);
+                          setState(() {});
+                        },
+                        onLongPress: () {
+                          songMenu(context, song);
+                          setState(() {});
+                        },
+                        child: songWidget(song,null),
+                      );
+                    });
+
+              })),
+
+
+
+        Expanded(child: FutureBuilder<List<PlayList>>(future: db.getPlaylistsById(playlists),
+                builder: (context, snapshot){
+                  if(snapshot.connectionState == ConnectionState.waiting)return CircularProgressIndicator();
+                  if(!snapshot.hasData || snapshot.data!.isEmpty){
+                    return const Text("La playlist è ancora vuota!");
+                  }
+                  if(snapshot.hasError){
+                    return Text(snapshot.error.toString());
+                  }
+                  final elements = snapshot.data!;
+                  return SizedBox(
+                    height: 64,
+                    child: ListView.builder(
+                        itemCount: elements.length,
+                        scrollDirection: Axis.horizontal,
+                        itemBuilder: (context,index){
+                          final playlist = elements[index];
+                          return Container(
+                            height: 120,
+                            width: 120,
+                            margin: const EdgeInsets.all(8.0),
+                            child: Card(
+                              child: InkWell(
+                                onTap: ()=>openAPLaylists(playlist.id!),
+                                child: Column(
+                                  mainAxisAlignment: .center,
+                                  children: [
+                                    coverImage(playlist.img ?? ""),
+                                    const SizedBox(height: 8,),
+                                    Text(
+                                      playlist.name,
+                                      textAlign: TextAlign.center,
+                                    )
+                                  ],
+                                ),
+                                onLongPress: (){
+                                  playlistMenu(context, playlist);
+                                },
+                              ),
+                            ),
+                          );
+                        }
+                    ),
+                  );
+                }),
           )
+
+
+
         ],
       ),
+      bottomNavigationBar: miniPlayer(audio: pl.player, expand: (){
+        Navigator.push(context, MaterialPageRoute(builder: (_)=>ExpandedPlayer(audio: pl.player, close: ()=>Navigator.pop(context),s:pl.currentSong)));
+      },s: pl.currentSong,),
 
     );
   }

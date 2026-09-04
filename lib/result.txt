@@ -5,6 +5,7 @@ import 'Widgets_player.dart';
 import 'Database.dart';
 import 'songWidget.dart';
 import 'modifyPlaylistPage.dart';
+import 'dart:math';
 
 class openPlayListPage extends StatefulWidget{
   final int? id;
@@ -79,6 +80,45 @@ class _openPlaylistState extends State<openPlayListPage>{
     });
 
   }
+
+  void bottomMenu(BuildContext context){
+    showModalBottomSheet(context: context, builder: (context){
+      return Column(
+        mainAxisSize: .min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.play_arrow),
+            title: const Text("Riproduci"),
+            onTap: ()async{
+              if(playList == null) return;
+              List<Song> newQueue = await db.getSongsById(playList!.songs);
+              pl.queueSongs = List.from(newQueue);
+              await pl.loadQueue(pl.queueSongs, 0);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.add_to_queue),
+            title: const Text("Aggiuni alla coda"),
+            onTap: ()async{
+              if(playList == null)return;
+              final songs = await db.getSongsById(playList!.songs);
+              await pl.addASongsToQueue(songs);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.shuffle),
+            title: const Text("Riproduzione casuale"),
+            onTap: ()async{
+              if(playList == null)return;
+              final songs = await db.getSongsById(playList!.songs);
+              songs.shuffle(Random());
+              await pl.loadQueue(songs, 0);
+            },
+          ),
+        ],
+      );
+    });
+  }
   @override
   void initState() {
     // TODO: implement initState
@@ -125,11 +165,9 @@ class _openPlaylistState extends State<openPlayListPage>{
         ],
       ),
       floatingActionButton: FloatingActionButton(
-          onPressed: ()async{
-  if(playList == null) return;
-  List<Song> newQueue = await db.getSongsById(playList!.songs);
-  pl.queueSongs = List.from(newQueue);
-  pl.loadQueue(pl.queueSongs, 0);},
+          onPressed: (){
+            bottomMenu(context);
+ },
     tooltip: 'Riproduci la playlist',
   child: const Icon(Icons.play_arrow_outlined),
 
@@ -149,6 +187,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
 import 'package:uri_content/uri_content.dart';
 import 'dart:io';
+import 'dart:math';
 
 
 
@@ -156,7 +195,10 @@ import 'all_playlist.dart';
 import 'Widgets_player.dart';
 import 'Database.dart';
 import 'addAPlaylits.dart';
-import 'package:simplemp3pkayer/SearchPage.dart';
+import 'SearchPage.dart';
+import 'songWidget.dart';
+import 'openPlaylistPage.dart';
+import 'playlistMenu.dart';
 
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
@@ -325,6 +367,10 @@ class _MyHomePageState extends State<MyHomePage> {
   bool isEspanded = false;
   final player = AudioPlayer();
   final db = songDatabase();
+  final homeElementsUtility = recommadedELementsUtility();
+  List<int> songs = [];
+  List<int> playlists = [];
+  bool isLoading = true;
   //final f = playlistManager();
 
 
@@ -377,12 +423,58 @@ class _MyHomePageState extends State<MyHomePage> {
     
   }
 
+  Future<homeElements> getElements()async{
+    final el = await homeElementsUtility.loadElements();
+    if(el == null || el.time_record.difference(DateTime.now()) > Duration(days: 1)){
+      final allSongs = (await db.getAllSongs()).map((s)=>s.id!).toList();
+      final allPlaylists = (await db.getAllPlaylists()).map((p)=>p.id!).toList();
+      allSongs.shuffle(Random());
+      allPlaylists.shuffle(Random());
+      setState(() {
+        songs = allSongs.sublist(0,min(6,allSongs.length));
+        playlists = allPlaylists.sublist(0,min(6, allPlaylists.length));
+        isLoading = false;
+      });
 
+      final newHomeElem = homeElements(
+          recom_playlist: playlists,
+          recom_songs: songs,
+          time_record: DateTime.now());
+      await homeElementsUtility.saveElements(newHomeElem);
+      return newHomeElem;
 
+    }
+    setState(() {
+      songs = el.recom_songs;
+      playlists = el.recom_playlist;
+      isLoading = false;
+    });
+    return el;
+  }
 
+  Future<void> openAPLaylists(int id)async{
+    await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
+  }
 
-
-
+  Widget coverImage(String path){
+    final file = File(path);
+    if(path != "" && file.existsSync()){
+      return ClipRRect(
+          borderRadius: .circular(16),
+    child: Image.memory(
+    file.readAsBytesSync(),
+    width: 60,
+    height: 60,
+    fit: .cover,
+    )
+    );
+    }else{
+    return Icon(
+    Icons.queue_music,
+    size: 60,
+    );
+    }
+  }
 
 
 
@@ -394,6 +486,7 @@ class _MyHomePageState extends State<MyHomePage> {
     //getSOngsIntoPhone();
     db.loadSong();
     db.loadPlaylists();
+    getElements();
     //initIncomingAudioFiles();
 
 
@@ -410,257 +503,177 @@ class _MyHomePageState extends State<MyHomePage> {
 
         title: Text(widget.title),
       ),
-      body: Stack(
+      body: Column(
 
         children: [
-          const Text("Prova!!"),
+          if(isLoading)CircularProgressIndicator(),
+          Expanded(child:
+          FutureBuilder<List<Song>>(future: db.getSongsById(songs),
+              builder: (context, snapshot){
+                if(snapshot.connectionState == ConnectionState.waiting)return CircularProgressIndicator();
+                if(!snapshot.hasData || snapshot.data!.isEmpty){
+                  return const Text("La playlist è ancora vuota!");
+                }
+                if(snapshot.hasError){
+                  return Text(snapshot.error.toString());
+                }
+                final songsElements = snapshot.data!;
 
-          Align(
-            alignment: Alignment.bottomCenter,
+                return GridView.builder(
+                    padding: const EdgeInsets.all(12.0),
+                    itemCount: songsElements.length,
 
-            child: Padding(padding: const EdgeInsets.only(bottom: 80),
-            child: miniPlayer(audio: pl.player, expand: (){
-              Navigator.push(context, MaterialPageRoute(builder: (_)=>ExpandedPlayer(audio: pl.player, close: ()=>Navigator.pop(context),s:pl.currentSong)));
-            },s: pl.currentSong,),)
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 1,
+                    ),
+                    itemBuilder: (context, index){
+                      final song = songsElements[index];
+                      return InkWell(
+                        onTap: () async {
+                          pl.queueSongs.clear();
+                          pl.queueSongs.add(song);
+                          await pl.loadQueue(pl.queueSongs, 0);
+                          setState(() {});
+                        },
+                        onLongPress: () {
+                          songMenu(context, song);
+                          setState(() {});
+                        },
+                        child: songWidget(song,null),
+                      );
+                    });
+
+              })),
+
+
+
+        Expanded(child: FutureBuilder<List<PlayList>>(future: db.getPlaylistsById(playlists),
+                builder: (context, snapshot){
+                  if(snapshot.connectionState == ConnectionState.waiting)return CircularProgressIndicator();
+                  if(!snapshot.hasData || snapshot.data!.isEmpty){
+                    return const Text("La playlist è ancora vuota!");
+                  }
+                  if(snapshot.hasError){
+                    return Text(snapshot.error.toString());
+                  }
+                  final elements = snapshot.data!;
+                  return SizedBox(
+                    height: 120,
+                    child: ListView.builder(
+                        itemCount: elements.length,
+                        scrollDirection: Axis.horizontal,
+                        itemBuilder: (context,index){
+                          final playlist = elements[index];
+                          return Card(
+                            child: InkWell(
+                              onTap: ()=>openAPLaylists(playlist.id!),
+                              child: Column(
+                                mainAxisAlignment: .center,
+                                children: [
+                                  coverImage(playlist.img ?? ""),
+                                  const SizedBox(height: 8,),
+                                  Text(
+                                    playlist.name,
+                                    textAlign: TextAlign.center,
+                                  )
+                                ],
+                              ),
+                              onLongPress: (){
+                                playlistMenu(context, playlist);
+                              },
+                            ),
+                          );
+                        }
+                    ),
+                  );
+                }),
           )
+
+
+
         ],
       ),
+      bottomNavigationBar: miniPlayer(audio: pl.player, expand: (){
+        Navigator.push(context, MaterialPageRoute(builder: (_)=>ExpandedPlayer(audio: pl.player, close: ()=>Navigator.pop(context),s:pl.currentSong)));
+      },s: pl.currentSong,),
 
     );
   }
 }
-import 'dart:async';
-import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'songWidget.dart';
 
-import 'dart:io';
+import 'Database.dart';
+import 'Widgets_player.dart';
 
-
-import 'package:sqflite/sqflite.dart';
-import 'package:crypto/crypto.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart';
-
-class Song{
-  final int? id;
-  final String Name;
-  final String path;
-  final int duration;
-  final String checkSum;
-  final bool isInFavorites;
-  const Song({required this.Name, required this.path,required this.duration,  required this.checkSum,this.isInFavorites=false, this.id,});
-
-  Map<String, Object> toDict(){
-    return {
-      "Name": Name,
-      "checksum": checkSum,
-      "path": path,
-      "duration": duration,
-      "isInFavorites": !isInFavorites ? 0 : 1
-
-    };
-  }
-  factory Song.fromDict(Map<String, Object?> m){
-    return Song(Name: m["name"] as String, path: m["path"] as String,checkSum: m["checksum"] as String, id: m["id"] as int, duration:  m["duration"] as int,
-        isInFavorites: (m["isInFavorites"] as int == 0 ? false : true) );
-  }
-
-  Song changeFavorites(bool value){
-    return Song(Name: Name, path: path, duration: duration, checkSum: checkSum, id: id, isInFavorites: value);
-  }
-
+class Queue extends StatefulWidget{
+  const Queue({super.key});
+  
   @override
-  String toString() {
-    // TODO: implement toString
-    return "Nome: $Name, path: $path, duration: $duration, checksum: $checkSum, isFavorites: $isInFavorites";
-  }
+  State<StatefulWidget> createState() => _QueueState();
 }
 
-class songDatabase{
-  songDatabase._();
-  static songDatabase sD = songDatabase._();
-  factory songDatabase(){
-    return sD;
+class _QueueState extends State<Queue>{
+  
+  final pl = PlayerManager();
+  @override
+  Widget build(BuildContext context) {
+    // TODO: implement build
+    return Scaffold(
+      body: Column(
+        children: [
+          const SizedBox(height: 40,),
+          miniPlayer(audio: pl.player, expand: (){
+            Navigator.pop(context);
+          }),
+          const SizedBox(height: 40,),
+          Expanded(child:
+          ReorderableListView.builder(
+
+              itemBuilder:(context, index){
+                final song = pl.queueSongs[index];
+
+                return ListTile(
+                  key: ValueKey(song.id),
+                  leading: index == pl.currentIndex ? const Icon(Icons.volume_up) : Text("${index+1}"),
+                  title: Text(song.Name),
+                  onTap: ()async{
+                    await pl.loadQueue(pl.queueSongs, index);
+                    setState(() {
+
+                    });
+
+                  },
+                  onLongPress: (){
+                    songMenu(context, song, type: menuType.queue, index: index);
+                    setState(() {
+
+                    });
+                  },
+
+                );
+              } , itemCount: pl.queueSongs.length,
+              onReorder: (oldIndex, newIndex)async{
+                if(newIndex>oldIndex){
+                  newIndex--;
+                }
+                await pl.moveSong(oldIndex, newIndex);
+            setState(() {
+
+
+            });
+          }),
+          ),
+
+        ],
+      )
+
+    );
   }
-  final String tableName = "Songs";
-  final String playlistTableName = "Playlists";
-
-  final StreamController<List<Song>> _controller = StreamController<List<Song>>.broadcast();
-  final StreamController<List<PlayList>> _controllerPlaylist = StreamController<List<PlayList>>.broadcast();
-
-  Future<void> loadSong()async{
-    final data = await getAllSongs();
-    _controller.add(data);
-  }
-
-  Future<void> loadPlaylists()async{
-    final data = await getAllPlaylists();
-    _controllerPlaylist.add(data);
-  }
-
-  Stream<List<Song>> get songStream => _controller.stream;
-  Stream<List<PlayList>> get playlistStream => _controllerPlaylist.stream;
-
-  late Database db;
-  Future<void> init()async{
-    db = await openDatabase(join(await getDatabasesPath(), 'database.db'),
-    onCreate: (db, version)async{
-      await db.execute('''
-      CREATE TABLE IF NOT EXISTS ${tableName}(
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        path TEXT,
-        checksum TEXT,
-        duration INTEGER,
-        isInFavorites INTEGER
-      );
-     
-      
-      ''');
-      await db.execute('''
-       CREATE TABLE IF NOT EXISTS ${playlistTableName}(
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        songs TEXT,
-        img TEXT,
-        isPinned INTEGER
-      );
-      
-      ''');
-    },version: 1);
-  }
-
-  Future<int> insert(Song s)async{
-    int id = await db.insert(tableName, s.toDict(),conflictAlgorithm: .replace);
-    loadSong();
-    return id;
-  }
-  Future<void> remove(int id)async{
-    await db.delete(tableName, where: "id = ?",whereArgs: [id]);
-    loadSong();
-  }
-  Future<void> update(Song s)async{
-    await db.update(tableName, s.toDict(),where: "id = ?", whereArgs: [s.id!]);
-    loadSong();
-  }
-  Future<List<Song>> getAllSongs()async{
-    final m =  await db.query(tableName);
-    return m.map((e){
-      return Song.fromDict(e);
-    }).toList();
-  }
-  Future<Song?> getASongById(int id)async{
-    final allS = await db.query(tableName, where: "id = ?",whereArgs: [id]);
-    return Song.fromDict(allS.first);
-  }
-  Future<bool> isSongNotInserted(String checksum)async{
-    final allS = await db.query(tableName,where: "checksum = ?",whereArgs: [checksum]);
-    return allS.isEmpty;
-  }
-
-  Future<List<Song>> getSongsById(List<int> ids)async{
-    List<Song> songs = [];
-    for(final id in ids){
-      final s = await getASongById(id);
-      if(s!=null) songs.add(s);
-    }
-    return songs;
-  }
-
-  Future<List<PlayList>> getAllPlaylists()async{
-    final m = await db.query(playlistTableName);
-
-    return m.map((p)=>PlayList.fromJson(p)).toList();
-  }
-
-  Future<int> addAPlaylist(PlayList p)async{
-    int id = await db.insert(playlistTableName, p.toJson());
-    loadPlaylists();
-    return id;
-  }
-
-  Future<void> removeAPlaylist(int id)async{
-    await db.delete(playlistTableName, where: "id = ?", whereArgs: [id]);
-    loadPlaylists();
-  }
-
-  Future<void> updateAPlaylist(PlayList p)async{
-    if(p.id == null) return;
-
-    await db.update(playlistTableName,p.toJson(), where: "id = ?", whereArgs: [p.id]);
-    loadPlaylists();
-
-  }
-  Future<PlayList> getAPlaylistById(int id)async{
-    final allP = await db.query(playlistTableName, where: "id = ?", whereArgs: [id]);
-    return PlayList.fromJson(allP.first);
-  }
-  Future<void> addASongToAPlaylist(int pId, int songId)async{
-    final playlist = await getAPlaylistById(pId);
-    if(playlist.songs.contains(songId))return;
-    final newP = PlayList(name: playlist.name, songs: [...playlist.songs, songId], img: playlist.img, id: playlist.id);
-    await updateAPlaylist(newP);
-  }
-
-  Future<void> removeASongFromAPlaylist(int pId, int songId)async{
-    final playlist = await getAPlaylistById(pId);
-    if(!playlist.songs.contains(songId))return;
-    final newP = PlayList(name: playlist.name, songs: playlist.songs.where((id)=>id!=songId).toList(), img: playlist.img, id: playlist.id);
-    await updateAPlaylist(newP);
-  }
-
-  Future<List<Song>> getAllFavoritesSongs()async{
-    final m = await db.query(tableName, where: "isInFavorites = ?", whereArgs: [1]);
-    return m.map((m)=>Song.fromDict(m)).toList();
-  }
-
-
-
-
-
 }
-
-class PlayList{
-  final String name;
-  final List<int> songs;
-  final String? img;
-  final int? id;
-  final bool isPinned;
-
-  const PlayList({required this.name, required this.songs,this.isPinned=false, this.id, this.img});
-  Map<String, dynamic> toJson(){
-    return {
-      'name': name,
-      'songs': songs.join(','),
-      'img': img,
-      "isPinned": !isPinned ? 0 : 1
-    };
-  }
-
-  factory PlayList.fromJson(Map<String, dynamic> json){
-	final songsString = json['songs'] as String;
-    return PlayList(name: json['name'] as String,
-        songs:songsString.isEmpty ? [] :  songsString.split(',').map((i)=>int.parse(i)).toList(),
-        id: json['id'] as int, img: json['img'] as String?, isPinned: json["isPinned"] as int == 0 ? false : true);
-  }
-
-
-}
-
-
-
-Future<String> calculateChecksum(String filePath)async{
-  final file = File(filePath);
-
-  if(!await file.exists()){
-    throw Exception("Il file con path $filePath non esiste");
-  }
-
-  final digest = await sha256.bind(file.openRead()).first;
-
-  return digest.toString();
-
-}
-
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -1242,293 +1255,535 @@ Widget build(BuildContext context) {
 }
 import 'package:flutter/material.dart';
 import 'Widgets_player.dart';
+import 'Database.dart';
 import 'songWidget.dart';
-import 'package:on_audio_query_pluse/on_audio_query.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
+import 'openPlaylistPage.dart';
+import 'playlistMenu.dart';
 import 'dart:io';
 
 
-import 'Database.dart';
-
-class allSongPage extends StatefulWidget{
-  const allSongPage({super.key});
+class searchPage extends StatefulWidget{
+  final String title;
+  const searchPage({super.key, required this.title});
 
   @override
-  State<allSongPage> createState() => allSongsState();
+  State<StatefulWidget> createState() => _searchPageState();
 }
 
-class allSongsState extends State<allSongPage>{
+class _searchPageState extends State<searchPage>{
 
-  final db = songDatabase();
-  final pl = PlayerManager();
+final pl = PlayerManager();
+final controller = TextEditingController();
 
-  final OnAudioQuery audioQuery = OnAudioQuery();
+ List<Song> songSearched = [];
+ List<PlayList> playlistSearched = [];
+ List<PlayList> allPlaylist = [];
+ List<Song> allSongs = [];
+ final dbSong = songDatabase();
+ //final dbPlaylist = playlistManager();
 
-  Future<void> pickAMusicFile ()async{
-    final result = await FilePicker.pickFiles(
-      type: FileType.audio,
-      allowMultiple: false,
+ bool isLoading = true;
+
+ Future<void> load()async{
+   try{
+     final db = songDatabase();
+
+      final songs = await db.getAllSongs();
+      final Playlists = await db.getAllPlaylists();
+
+   if(mounted){
+     setState(() {
+        isLoading = false;
+        allSongs = songs;
+        allPlaylist = Playlists;
+     });
+   }}catch(e){
+     print("Errore seachPage: $e");
+   setState(() {
+     isLoading = false;
+   });
+   }
+ }
+
+Future<void> searchListener()async{
+  final txt = controller.text.trim().toLowerCase();
+
+  if(txt.isEmpty){
+    setState(() {
+      songSearched.clear();
+      playlistSearched.clear();
+
+    });
+    return;
+  }
+
+
+  songSearched = allSongs.where((s)=>s.Name.toLowerCase().contains(txt)).toList();
+   playlistSearched = allPlaylist.where((p)=>p.name.toLowerCase().contains(txt)).toList();
+
+   setState(() {
+
+   });
+}
+
+
+
+Widget songsWidget(){
+  if(songSearched.isNotEmpty){
+    return Column(
+      children: List.generate(songSearched.length, (index){
+        return  InkWell(
+          onTap: ()async{
+            pl.queueSongs.clear();
+            pl.queueSongs.add(songSearched[index]);
+            pl.loadQueue(pl.queueSongs, 0);
+
+            setState(() {
+
+            });
+
+          },
+          onLongPress: (){
+            songMenu(context, songSearched[index]);
+            setState(() {
+
+            });
+          },
+          child: songWidget(songSearched[index],null),
+        );
+      })
+
+
     );
 
-    if(result!=null){
-      final file = File(result.files.single.path!);
 
-      final dir = await getApplicationDocumentsDirectory();
-
-      final newFile = await file.copy(
-          "${dir.path}/${result.files.single.name}"
-      );
-
-
-      print(result.paths[0]);
-
-      print("Path first,path: ${newFile.path}");
-
-      final checkSum = await calculateChecksum(newFile.path);
-
-
-
-
-
-      //if(await db.isSongNotInserted(result.names[0]!)){
-      final nSong = Song(Name: result.names[0]!, path: newFile.path,duration: 0, checkSum: checkSum);
-      await db.insert(nSong);
-
-
-      await pl.addASongsToQueue([nSong]);
-
-      setState(() {
-
-      });
-      //}
-
-
-    }
-    print(await db.getAllSongs());
-  }
-
-  Future<void> getSOngsIntoPhone()async{
-
-
-    bool permission = await audioQuery.permissionsRequest();
-    print("Richiesta permesso audioQuery: $permission}");
-    bool status = await audioQuery.permissionsStatus();
-    print("status audioQuery: $status}");
-    if(!status){
-      permission = await audioQuery.permissionsRequest();
-      print("Richiesta permesso audioQuery: $permission}");
-    }
-    status = await audioQuery.permissionsStatus();
-    print("status audioQuery: $status}");
-    if (!await audioQuery.permissionsStatus())return;
-
-    final songs = await audioQuery.querySongs();
-    print("Numero di canzoni: ${songs.length}");
-
-    final songsType = await Future.wait(songs.map((s)async{
-      return Song(Name: s.title, path: s.data, duration: s.duration ?? 0, checkSum: await calculateChecksum(s.data));
-    }));
-    for(final s in songsType){
-      print(s.toString());
-      if(await db.isSongNotInserted(s.checkSum)){
-        await db.insert(s);
-      }
-    }
 
 
   }
+  return const Text("");
+}
 
-  Future<void> showAddMenu()async{
-    pl.queueSongs.forEach((f)=>print(f.Name));
-    showModalBottomSheet(context: context, builder: (context){
-      return SafeArea(child: Column(
-        mainAxisSize: .min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.music_note),
-            title: const Text("Agiungi canzone"),
-            onTap: (){
-              Navigator.pop(context);
-              pickAMusicFile();
-            },
-          ),
+Future<void> openAPLaylists(PlayList p, int id)async{
+  await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
+}
 
-          ListTile(
-            leading: const Icon(Icons.library_music),
-            title: const Text("Sincoranizza con la cartella 'music' del dispositivo"),
-            onTap: (){
-              Navigator.pop(context);
-              getSOngsIntoPhone();
-            },
-          )
-        ],
-      ));
-    });
+Widget coverImage(String path){
+  final file = File(path);
+  if(path != "" && file.existsSync()){
+    return ClipRRect(
+        borderRadius: .circular(16),
+        child: Image.memory(
+          file.readAsBytesSync(),
+          width: 60,
+          height: 60,
+          fit: .cover,
+        )
+    );
+  }else{
+      return Icon(
+      Icons.queue_music,
+      size: 60,
+    );
   }
+}
+
+Widget playlistsWidget(){
+   if(isLoading){
+     return CircularProgressIndicator();
+   }
+  if(playlistSearched.isNotEmpty){
+    return Column(
+      children:
+        List.generate(
+            playlistSearched.length,
+           (index){
+              final playlist = allPlaylist.firstWhere((p)=>p == playlistSearched[index]);
+              int correctIndex = allPlaylist.indexOf(playlist);
+
+                  return Card(
+                      child: InkWell(
+                        onTap: ()=>openAPLaylists(playlistSearched[index], playlist.id!),
+                        child: Column(
+                          mainAxisAlignment: .center,
+                          children: [
+                            coverImage(playlistSearched[index].img!),
+                            const SizedBox(height: 8,),
+                            Text(
+                              playlist.name,
+                              textAlign: TextAlign.center,
+                            )
+                          ],
+                        ),
+                        onLongPress: (){
+                          playlistMenu(context, playlistSearched[index]);
+                        },
+                      ),
+                    );
+
+
+
+            })
+
+    );
+  }
+  return const Text("");
+}
 
   @override
   void initState() {
     // TODO: implement initState
     super.initState();
-    db.loadSong();
+    controller.addListener(searchListener);
+    load();
+
   }
 
+
+
+  @override
+  void dispose() {
+
+    super.dispose();
+    controller.dispose();
+
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Tutte le canzoni"),
-      ),
-      body: Column(
-        children: [
-          // -------------------------------------------------------------
-          // 1. INSERISCI QUI LA ROBA CHE VUOI AGGIUNGERE SOPRA
-          // -------------------------------------------------------------
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body:SafeArea(
+        child: Column(
+          children: [
+            Padding(padding: const EdgeInsetsGeometry.all(10), child: SearchBar(
+              hintText: "Inserisci la canzone/playlist da cercare...",
+              controller: controller,
+            ),),
+
+            Expanded(child: ListView(
               children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    // Esempio: Riproduci casuale
-                  },
-                  icon: const Icon(Icons.shuffle),
-                  label: const Text("Riproduci Casuale"),
-                ),
-                Text(
-                  "Totale elementi",
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-            ),
-          ),
+                songsWidget(),
+                const SizedBox(height: 20,),
+                playlistsWidget(),
+              ]
 
-          const Divider(height: 1), // Una linea di separazione facoltativa
+            )),
 
-          // -------------------------------------------------------------
-          // 2. LA LISTA DELLE CANZONI (AVVOLTA IN EXPANDED)
-          // -------------------------------------------------------------
-          Expanded(
-            child: StreamBuilder<List<Song>>(
-              stream: db.songStream,
-              initialData: const [],
-              builder: (context, snapshot) {
-                final songs = snapshot.data ?? [];
 
-                if (songs.isEmpty) {
-                  return const Center(
-                    child: Text("Nessuna canzone disponibile"),
-                  );
-                }
 
-                return ListView.builder(
-                  itemCount: songs.length,
-                  itemBuilder: (context, i) {
-                    final song = songs[i];
-                    return InkWell(
-                      onTap: () async {
-                        pl.queueSongs.clear();
-                        pl.queueSongs.add(song);
-                        await pl.loadQueue(pl.queueSongs, 0);
-                        setState(() {});
-                      },
-                      onLongPress: () {
-                        songMenu(context, song);
-                        setState(() {});
-                      },
-                      child: songWidget(song, i),
-                    );
-                  },
-                );
-              },
-            ),
+          ],
+        )
+    ),
+
+
+
+    bottomNavigationBar:  miniPlayer(audio: pl.player, expand: (){
+      Navigator.push(context, MaterialPageRoute(builder: (_)=>ExpandedPlayer(audio: pl.player, close: ()=>Navigator.pop(context),s:pl.currentSong)));
+    },s: pl.currentSong,),
+    );
+
+
+  }
+}
+import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'Database.dart';
+
+class addAPlaylist extends StatefulWidget{
+  final String title;
+  const addAPlaylist({super.key, required this.title});
+
+  @override
+  State<StatefulWidget> createState() => _addPlaylistState();
+}
+
+class _addPlaylistState extends State<addAPlaylist>{
+  final db = songDatabase();
+  final textEditing = TextEditingController();
+  final d = songDatabase();
+  String btnText = "Seleziona un'immagine da mettere come copertina dell'album";
+  String pathImg = "";
+
+  Future<void> addAPlaylist()async{
+    if (textEditing.text.isNotEmpty){
+      final p = PlayList(name: textEditing.text, songs: [], img: pathImg);
+      await db.addAPlaylist(p);
+    }
+
+  }
+
+
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    db.loadPlaylists();
+  }
+
+  Future<void> showSongsIntoAPLaylist(int id)async{
+    final p = await db.getAPlaylistById(id);
+
+    final songs = await d.getSongsById(p.songs);
+    songs.forEach((s)=> print(s.Name));
+
+
+  }
+
+  @override
+  void dispose() {
+    textEditing.dispose();
+    super.dispose();
+
+  }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        mainAxisAlignment: .center,
+        children: [
+          StreamBuilder<List<PlayList>>(stream: db.playlistStream,
+              initialData: [],
+
+              builder: (context, snapshot){
+              final playlist = snapshot.data!;
+              return Column(
+                children: List.generate(playlist.length, (i){
+                  final p = playlist[i];
+                  return TextButton(onPressed:()=>showSongsIntoAPLaylist(p.id!) , child: Text(playlist[i].name));
+                }),
+              );
+              }),
+          Padding(padding: const EdgeInsets.all(10),
+          child: TextField(
+              controller: textEditing,
+              decoration: InputDecoration(
+                labelText: "Inserisci il titolo della playlist"
+              ),
+          ),),
+          Padding(padding: const EdgeInsets.all(10),
+            child: TextButton.icon(onPressed: ()async{
+              final file = await FilePicker.pickFiles(
+                type: FileType.image,
+                allowMultiple: false
+              );
+              if(file != null && file.files.single.path != null){
+                final originalFile = File(file.files.single.path!);
+
+                final appDir = await getApplicationDocumentsDirectory();
+                final fileName = "playlist_${DateTime.now().millisecondsSinceEpoch}.${file.files.single.extension}";
+                final savedImage = await originalFile.copy("${appDir.path}/$fileName");
+
+                setState(() {
+                  pathImg = savedImage.path;
+                  btnText = file.files.single.name;
+                });
+                print("path img salvata: ${pathImg}");
+              }
+
+            }, label: Text(btnText), icon: Icon(Icons.image),),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: showAddMenu,
-        tooltip: 'Increment',
+          onPressed: addAPlaylist,
         child: const Icon(Icons.add),
       ),
-      floatingActionButtonLocation: .endFloat,
-      bottomNavigationBar:  miniPlayer(audio: pl.player, expand: (){
-        Navigator.push(context, MaterialPageRoute(builder: (_)=>ExpandedPlayer(audio: pl.player, close: ()=>Navigator.pop(context),s:pl.currentSong)));
-      },s: pl.currentSong,),
     );
+
   }
 }
 import 'package:flutter/material.dart';
-import 'songWidget.dart';
+import 'package:metadata_god/metadata_god.dart';
+import 'package:just_audio/just_audio.dart';
 
-import 'Database.dart';
 import 'Widgets_player.dart';
+import 'Database.dart';
 
-class Queue extends StatefulWidget{
-  const Queue({super.key});
-  
-  @override
-  State<StatefulWidget> createState() => _QueueState();
-}
-
-class _QueueState extends State<Queue>{
-  
-  final pl = PlayerManager();
-  @override
-  Widget build(BuildContext context) {
-    // TODO: implement build
-    return Scaffold(
-      body: Column(
-        children: [
-          const SizedBox(height: 40,),
-          miniPlayer(audio: pl.player, expand: (){
-            Navigator.pop(context);
-          }),
-          const SizedBox(height: 40,),
-          Expanded(child:
-          ReorderableListView.builder(
-
-              itemBuilder:(context, index){
-                final song = pl.queueSongs[index];
-
-                return ListTile(
-                  key: ValueKey(song.id),
-                  leading: index == pl.currentIndex ? const Icon(Icons.volume_up) : Text("${index+1}"),
-                  title: Text(song.Name),
-                  onTap: ()async{
-                    await pl.loadQueue(pl.queueSongs, index);
-                    setState(() {
-
-                    });
-
-                  },
-                  onLongPress: (){
-                    songMenu(context, song, type: menuType.queue, index: index);
-                    setState(() {
-
-                    });
-                  },
-
-                );
-              } , itemCount: pl.queueSongs.length,
-              onReorder: (oldIndex, newIndex)async{
-                if(newIndex>oldIndex){
-                  newIndex--;
-                }
-                await pl.moveSong(oldIndex, newIndex);
-            setState(() {
-
-
-            });
-          }),
-          ),
-
-        ],
-      )
-
+Widget image(Metadata? metadati){
+  if(metadati?.picture?.data != null){
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.memory(
+        metadati!.picture!.data,
+        width: 50,
+        height: 50,
+        fit: BoxFit.cover,
+      ),
     );
   }
+  return Container(
+    width: 50,
+    height: 50,
+    decoration: BoxDecoration(
+      color: Colors.grey.shade300,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: const Icon(
+      Icons.music_note,
+      size: 20,
+    ),
+  );
+}
+
+Future<Metadata?> getMetadata(String path)async{
+  try{
+    final m = await MetadataGod.readMetadata(file: path);
+    return m;
+  }catch(_){}
+  return null;
+
+}
+
+Widget indexWidget(int? index){
+  if(index == null){
+    return const Text("");
+  }else{
+    return Text("${index+1}",style: TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold
+    ),);
+  }
+}
+
+
+
+Widget songWidget(Song s, int? index){
+
+
+  return Row(
+    mainAxisAlignment: .center,
+    children: [
+     indexWidget(index),
+
+      FutureBuilder<Metadata?>(future:getMetadata(s.path), builder: (context,snapshot){
+        return Row(
+          children: [
+            image(snapshot.data),
+            Text(snapshot.data?.title ?? s.Name, style: TextStyle(
+                fontSize: 16
+            ),),
+
+          ],
+        );
+      }),
+     
+
+
+
+    ],
+  );
+}
+
+Future<void> showPlaylistSelector(int songId, BuildContext context)async{
+  //final pl = playlistManager();
+  final dbSong = songDatabase();
+  final playlists = await dbSong.getAllPlaylists();
+  if(!context.mounted)return;
+  showModalBottomSheet(context: context, builder: (context){
+    return ListView.builder(
+        itemCount: playlists.length,
+
+        itemBuilder: (context, index){
+          final playlist = playlists[index];
+          return ListTile(
+            title: Text(playlist.name),
+            onTap: ()async{
+              await dbSong.addASongToAPlaylist(playlist.id!, songId);
+              Navigator.pop(context);
+            },
+
+          );
+
+        }
+    );
+  });
+
+}
+
+enum menuType{
+  normal,
+  queue,
+  Playlist
+}
+
+void songMenu(BuildContext context, Song s, {menuType type = menuType.normal, int index=-1, int pId = -1}){
+  final pl = PlayerManager();
+  final dbSong = songDatabase();
+  showModalBottomSheet(context: context, builder: (context){
+    return Column(
+      mainAxisSize: .min,
+      children: [
+
+        ListTile(
+          leading: const Icon(Icons.playlist_add),
+          title: const Text("Aggiungi a una playlist"),
+          onTap: (){
+            showPlaylistSelector(s.id!, context);
+            Navigator.pop(context);
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.music_off),
+          title: const Text("Rimuovi dall player"),
+          onTap: ()async{
+            //await pDb.removeASongFromAPLaylist(widget.playList!.name, s.id!);
+            await dbSong.remove(s.id!);
+
+            Navigator.pop(context);
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.add_to_queue_outlined),
+          title: const Text("Aggiungi in coda"),
+          onTap: ()async{
+            await pl.addASongsToQueue([s]);
+            Navigator.pop(context);
+          },
+        ),
+        ListTile(
+          leading:s.isInFavorites ? const Icon(Icons.favorite) : const Icon(Icons.favorite_border),
+          title:const Text("Aggiungi/togli ai favoriti"),
+          onTap: ()async{
+            final song = s.changeFavorites(!s.isInFavorites);
+            await dbSong.update(song);
+            Navigator.pop(context);
+          },
+        ),
+
+        menuAdded(context, index, type, pId, s.id!),
+
+
+      ],
+    );
+  });
+}
+
+Widget menuAdded(BuildContext context, int index, menuType tipo, int pId, int songId){
+  if(tipo==menuType.queue){
+    return ListTile(
+      leading: const Icon(Icons.remove_from_queue),
+      title: const Text("Rimuovi dalla coda"),
+      onTap: ()async{
+        Navigator.pop(context);
+        final pl = PlayerManager();
+        await pl.removeSongAt(index);
+
+      },
+    );
+  }else if(tipo == menuType.Playlist){
+    return ListTile(
+      leading: const Icon(Icons.remove),
+      title: const Text("Rimuovi dalla playlist"),
+      onTap: ()async{
+        Navigator.pop(context);
+        final db = songDatabase();
+        await db.removeASongFromAPlaylist(pId, songId);
+
+      },
+    );
+  }
+  return const Text("");
 }
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
@@ -1718,486 +1973,6 @@ class _modifyPlaylistPageState extends State<modifyPlaylistPage>{
 
       ),
     );
-  }
-}
-import 'package:flutter/material.dart';
-import 'dart:io';
-import 'allSongsPage.dart';
-import 'Database.dart';
-import 'openPlaylistPage.dart';
-import 'addAPlaylits.dart';
-import 'FavoritesSong.dart';
-
-
-class allPlaylist extends StatefulWidget{
-  final String title;
-  const allPlaylist({super.key, required this.title});
-
-  @override
-  State<StatefulWidget> createState() => _allPlaylistState();
-}
-
-class _allPlaylistState extends State<allPlaylist>{
-
-  final db = songDatabase();
-  
-  Future<void> openAPLaylists(int id)async{
-    await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
-  }
-
-  Future<void> addPlaylist()async{
-    await Navigator.push(context, MaterialPageRoute(builder: (_)=>addAPlaylist(title: "add A PLayist")));
-  }
-
-  Widget coverImage(String path){
-    final file = File(path);
-    if(path != "" && file.existsSync()){
-      return ClipRRect(
-        borderRadius: .circular(16),
-        child: Image.memory(
-          file.readAsBytesSync(),
-          width: 60,
-          height: 60,
-          fit: .cover,
-        )
-      );
-    }else{
-      return Icon(
-        Icons.queue_music,
-        size: 60,
-      );
-    }
-  }
-
-  @override
-  void initState() {
-    // TODO: implement initState
-    super.initState();
-    db.loadPlaylists();
-
-  }
-
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: StreamBuilder<List<PlayList>>(
-          stream: db.playlistStream,
-          initialData: const[],
-          builder: (context, snapshot){
-              final playlists = snapshot.data!;
-              return GridView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: playlists.length+2,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                    childAspectRatio: 1,
-                  ),
-                  itemBuilder: (context, index){
-                    if(index==0){
-                      return Card(
-                        color: Colors.blueAccent,
-                        child: InkWell(
-                          onTap: ()async{
-                            await Navigator.push(context,
-                                MaterialPageRoute(builder: (_)=>allSongPage()));
-                          },
-                          child: Column(
-                            mainAxisAlignment: .center,
-                            children: [
-                              Icon(
-                                Icons.library_music,
-                                size: 60,
-                              ),
-                              const SizedBox(height: 8,),
-                              Text(
-                                "Tutte le canzoni",
-                                textAlign: TextAlign.center,
-                              )
-                            ],
-                          ),
-                        ),
-                      );
-
-                    }
-                    if(index == 1){
-                      return Card(
-                        color: Colors.redAccent,
-                        child: InkWell(
-                          onTap: ()async{
-                            await Navigator.push(context,
-                                MaterialPageRoute(builder: (_)=>FavoritesSong()));
-                          },
-                          child: Column(
-                            mainAxisAlignment: .center,
-                            children: [
-                              Icon(
-                                Icons.favorite_rounded,
-                                size: 60,
-                              ),
-                              const SizedBox(height: 8,),
-                              Text(
-                                "Canzoni preferite",
-                                textAlign: TextAlign.center,
-                              )
-                            ],
-                          ),
-                        ),
-                      );
-                    }
-                    final playlist = playlists[index-2];
-                    return Card(
-                      child: InkWell(
-                        onTap: ()=>openAPLaylists(playlist.id!),
-                        child: Column(
-                          mainAxisAlignment: .center,
-                          children: [
-                            coverImage(playlist.img ?? ""),
-                            const SizedBox(height: 8,),
-                            Text(
-                              playlist.name,
-                              textAlign: TextAlign.center,
-                            )
-                          ],
-                        ),
-                      ),
-                    );
-                  });
-          }),
-      floatingActionButton: FloatingActionButton(
-        onPressed: addPlaylist,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
-
-    );
-
-
-  }
-}
-import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
-import 'Database.dart';
-
-class addAPlaylist extends StatefulWidget{
-  final String title;
-  const addAPlaylist({super.key, required this.title});
-
-  @override
-  State<StatefulWidget> createState() => _addPlaylistState();
-}
-
-class _addPlaylistState extends State<addAPlaylist>{
-  final db = songDatabase();
-  final textEditing = TextEditingController();
-  final d = songDatabase();
-  String btnText = "Seleziona un'immagine da mettere come copertina dell'album";
-  String pathImg = "";
-
-  Future<void> addAPlaylist()async{
-    if (textEditing.text.isNotEmpty){
-      final p = PlayList(name: textEditing.text, songs: [], img: pathImg);
-      await db.addAPlaylist(p);
-    }
-
-  }
-
-
-
-  @override
-  void initState() {
-    // TODO: implement initState
-    super.initState();
-    db.loadPlaylists();
-  }
-
-  Future<void> showSongsIntoAPLaylist(int id)async{
-    final p = await db.getAPlaylistById(id);
-
-    final songs = await d.getSongsById(p.songs);
-    songs.forEach((s)=> print(s.Name));
-
-
-  }
-
-  @override
-  void dispose() {
-    textEditing.dispose();
-    super.dispose();
-
-  }
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        mainAxisAlignment: .center,
-        children: [
-          StreamBuilder<List<PlayList>>(stream: db.playlistStream,
-              initialData: [],
-
-              builder: (context, snapshot){
-              final playlist = snapshot.data!;
-              return Column(
-                children: List.generate(playlist.length, (i){
-                  final p = playlist[i];
-                  return TextButton(onPressed:()=>showSongsIntoAPLaylist(p.id!) , child: Text(playlist[i].name));
-                }),
-              );
-              }),
-          Padding(padding: const EdgeInsets.all(10),
-          child: TextField(
-              controller: textEditing,
-              decoration: InputDecoration(
-                labelText: "Inserisci il titolo della playlist"
-              ),
-          ),),
-          Padding(padding: const EdgeInsets.all(10),
-            child: TextButton.icon(onPressed: ()async{
-              final file = await FilePicker.pickFiles(
-                type: FileType.image,
-                allowMultiple: false
-              );
-              if(file != null && file.files.single.path != null){
-                final originalFile = File(file.files.single.path!);
-
-                final appDir = await getApplicationDocumentsDirectory();
-                final fileName = "playlist_${DateTime.now().millisecondsSinceEpoch}.${file.files.single.extension}";
-                final savedImage = await originalFile.copy("${appDir.path}/$fileName");
-
-                setState(() {
-                  pathImg = savedImage.path;
-                  btnText = file.files.single.name;
-                });
-                print("path img salvata: ${pathImg}");
-              }
-
-            }, label: Text(btnText), icon: Icon(Icons.image),),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-          onPressed: addAPlaylist,
-        child: const Icon(Icons.add),
-      ),
-    );
-
-  }
-}
-import 'package:flutter/material.dart';
-import 'Widgets_player.dart';
-import 'Database.dart';
-import 'songWidget.dart';
-import 'openPlaylistPage.dart';
-
-
-class searchPage extends StatefulWidget{
-  final String title;
-  const searchPage({super.key, required this.title});
-
-  @override
-  State<StatefulWidget> createState() => _searchPageState();
-}
-
-class _searchPageState extends State<searchPage>{
-
-final pl = PlayerManager();
-final controller = TextEditingController();
-
- List<Song> songSearched = [];
- List<PlayList> playlistSearched = [];
- List<PlayList> allPlaylist = [];
- List<Song> allSongs = [];
- final dbSong = songDatabase();
- //final dbPlaylist = playlistManager();
-
- bool isLoading = true;
-
- Future<void> load()async{
-   try{
-     final db = songDatabase();
-
-      final songs = await db.getAllSongs();
-      final Playlists = await db.getAllPlaylists();
-
-   if(mounted){
-     setState(() {
-        isLoading = false;
-        allSongs = songs;
-        allPlaylist = Playlists;
-     });
-   }}catch(e){
-     print("Errore seachPage: $e");
-   setState(() {
-     isLoading = false;
-   });
-   }
- }
-
-Future<void> searchListener()async{
-  final txt = controller.text.trim().toLowerCase();
-
-  if(txt.isEmpty){
-    setState(() {
-      songSearched.clear();
-      playlistSearched.clear();
-
-    });
-    return;
-  }
-
-
-  songSearched = allSongs.where((s)=>s.Name.toLowerCase().contains(txt)).toList();
-   playlistSearched = allPlaylist.where((p)=>p.name.toLowerCase().contains(txt)).toList();
-
-   setState(() {
-
-   });
-}
-
-
-
-Widget songsWidget(){
-  if(songSearched.isNotEmpty){
-    return Column(
-      children: List.generate(songSearched.length, (index){
-        return  InkWell(
-          onTap: ()async{
-            pl.queueSongs.clear();
-            pl.queueSongs.add(songSearched[index]);
-            pl.loadQueue(pl.queueSongs, 0);
-
-            setState(() {
-
-            });
-
-          },
-          onLongPress: (){
-            songMenu(context, songSearched[index]);
-            setState(() {
-
-            });
-          },
-          child: songWidget(songSearched[index],null),
-        );
-      })
-
-
-    );
-
-
-
-
-  }
-  return const Text("");
-}
-
-Future<void> openAPLaylists(PlayList p, int id)async{
-  await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
-}
-
-Widget playlistsWidget(){
-   if(isLoading){
-     return CircularProgressIndicator();
-   }
-  if(playlistSearched.isNotEmpty){
-    return Column(
-      children:
-        List.generate(
-            playlistSearched.length,
-           (index){
-              final playlist = allPlaylist.firstWhere((p)=>p == playlistSearched[index]);
-              int correctIndex = allPlaylist.indexOf(playlist);
-
-                  return Card(
-                      child: InkWell(
-                        onTap: ()=>openAPLaylists(playlistSearched[index], playlist.id!),
-                        child: Column(
-                          mainAxisAlignment: .center,
-                          children: [
-                            Icon(
-                              Icons.queue_music,
-                              size: 60,
-                            ),
-                            const SizedBox(height: 8,),
-                            Text(
-                              playlist.name,
-                              textAlign: TextAlign.center,
-                            )
-                          ],
-                        ),
-                      ),
-                    );
-
-
-
-            })
-
-    );
-  }
-  return const Text("");
-}
-
-  @override
-  void initState() {
-    // TODO: implement initState
-    super.initState();
-    controller.addListener(searchListener);
-    load();
-
-  }
-
-
-
-  @override
-  void dispose() {
-
-    super.dispose();
-    controller.dispose();
-
-  }
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body:SafeArea(
-        child: Column(
-          children: [
-            Padding(padding: const EdgeInsetsGeometry.all(10), child: SearchBar(
-              hintText: "Inserisci la canzone/playlist da cercare...",
-              controller: controller,
-            ),),
-
-            Expanded(child: ListView(
-              children: [
-                songsWidget(),
-                const SizedBox(height: 20,),
-                playlistsWidget(),
-              ]
-
-            )),
-
-
-
-          ],
-        )
-    ),
-
-
-
-    bottomNavigationBar:  miniPlayer(audio: pl.player, expand: (){
-      Navigator.push(context, MaterialPageRoute(builder: (_)=>ExpandedPlayer(audio: pl.player, close: ()=>Navigator.pop(context),s:pl.currentSong)));
-    },s: pl.currentSong,),
-    );
-
-
   }
 }
 import 'package:flutter/material.dart';
@@ -2407,194 +2182,780 @@ class _AudioSeekBarState extends State<AudioSeekBar> {
   }
 }
 import 'package:flutter/material.dart';
-import 'package:metadata_god/metadata_god.dart';
-import 'package:just_audio/just_audio.dart';
-
-import 'Widgets_player.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as pathDart;
 import 'Database.dart';
+import 'openPlaylistPage.dart';
+import 'modifyPlaylistPage.dart';
+import 'Widgets_player.dart';
 
-Widget image(Metadata? metadati){
-  if(metadati?.picture?.data != null){
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Image.memory(
-        metadati!.picture!.data,
-        width: 50,
-        height: 50,
-        fit: BoxFit.cover,
-      ),
-    );
-  }
-  return Container(
-    width: 50,
-    height: 50,
-    decoration: BoxDecoration(
-      color: Colors.grey.shade300,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: const Icon(
-      Icons.music_note,
-      size: 20,
-    ),
-  );
-}
-
-Future<Metadata?> getMetadata(String path)async{
-  try{
-    final m = await MetadataGod.readMetadata(file: path);
-    return m;
-  }catch(_){}
-  return null;
-
-}
-
-Widget indexWidget(int? index){
-  if(index == null){
-    return const Text("");
-  }else{
-    return Text("${index+1}",style: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold
-    ),);
-  }
-}
-
-
-
-Widget songWidget(Song s, int? index){
-
-
-  return Row(
-    mainAxisAlignment: .center,
-    children: [
-     indexWidget(index),
-
-      FutureBuilder<Metadata?>(future:getMetadata(s.path), builder: (context,snapshot){
-        return Row(
-          children: [
-            image(snapshot.data),
-            Text(snapshot.data?.title ?? s.Name, style: TextStyle(
-                fontSize: 16
-            ),),
-
-          ],
-        );
-      }),
-     
-
-
-
-    ],
-  );
-}
-
-Future<void> showPlaylistSelector(int songId, BuildContext context)async{
-  //final pl = playlistManager();
+void playlistMenu(BuildContext context, PlayList p){
   final dbSong = songDatabase();
-  final playlists = await dbSong.getAllPlaylists();
-  if(!context.mounted)return;
-  showModalBottomSheet(context: context, builder: (context){
-    return ListView.builder(
-        itemCount: playlists.length,
-
-        itemBuilder: (context, index){
-          final playlist = playlists[index];
-          return ListTile(
-            title: Text(playlist.name),
-            onTap: ()async{
-              await dbSong.addASongToAPlaylist(playlist.id!, songId);
-              Navigator.pop(context);
-            },
-
-          );
-
-        }
-    );
-  });
-
-}
-
-enum menuType{
-  normal,
-  queue,
-  Playlist
-}
-
-void songMenu(BuildContext context, Song s, {menuType type = menuType.normal, int index=-1, int pId = -1}){
   final pl = PlayerManager();
-  final dbSong = songDatabase();
+  
   showModalBottomSheet(context: context, builder: (context){
     return Column(
       mainAxisSize: .min,
       children: [
-
         ListTile(
-          leading: const Icon(Icons.playlist_add),
-          title: const Text("Aggiungi a una playlist"),
+          leading: const Icon(Icons.open_in_new),
+          title: const Text("Apri"),
           onTap: (){
-            showPlaylistSelector(s.id!, context);
+            Navigator.pop(context);
+            Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: p.id,)));
+
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.mode_edit),
+          title: const Text("Modifica"),
+          onTap: (){
+            Navigator.pop(context);
+            Navigator.push(context, MaterialPageRoute(builder: (_)=>modifyPlaylistPage(id: p.id,)));
+
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.copy),
+          title: const Text("Copia"),
+          onTap: ()async{
+            String img = "";
+
+            if(p.img != null || p.img != ""){
+              final file = File(p.img!);
+              if(await file.exists()){
+                final appDir = await getApplicationDocumentsDirectory();
+                final fileName = "playlist_${DateTime.now().millisecondsSinceEpoch}${pathDart.extension(p.img!)}";
+                final newFile = await file.copy(fileName);
+                img = newFile.path;
+              }
+            }
+            final newP = PlayList(
+                name: p.name,
+                songs: p.songs,
+                img: img,
+
+            );
+            await dbSong.addAPlaylist(newP);
             Navigator.pop(context);
           },
         ),
         ListTile(
-          leading: const Icon(Icons.music_off),
-          title: const Text("Rimuovi dall player"),
+          leading: const Icon(Icons.delete),
+          title: const Text("Elimina"),
           onTap: ()async{
-            //await pDb.removeASongFromAPLaylist(widget.playList!.name, s.id!);
-            await dbSong.remove(s.id!);
-
+            if(p.id==null)return;
+            await dbSong.removeAPlaylist(p.id!);
             Navigator.pop(context);
           },
         ),
         ListTile(
-          leading: const Icon(Icons.add_to_queue_outlined),
-          title: const Text("Aggiungi in coda"),
+          leading: const Icon(Icons.add_to_queue),
+          title: const Text("Aggiungi canzoni alla coda"),
           onTap: ()async{
-            await pl.addASongsToQueue([s]);
+            final songs = await dbSong.getSongsById(p.songs);
+            await pl.addASongsToQueue(songs);
             Navigator.pop(context);
           },
         ),
         ListTile(
-          leading:s.isInFavorites ? const Icon(Icons.favorite) : const Icon(Icons.favorite_border),
-          title:const Text("Aggiungi/togli ai favoriti"),
+          leading: const Icon(Icons.play_arrow),
+          title: const Text("Fai partire la playlist"),
           onTap: ()async{
-            final song = s.changeFavorites(!s.isInFavorites);
-            await dbSong.update(song);
+            final songs = await dbSong.getSongsById(p.songs);
+            await pl.loadQueue(songs, 0);
+
             Navigator.pop(context);
           },
         ),
-
-        menuAdded(context, index, type, pId, s.id!),
-
-
       ],
     );
   });
 }
+import 'package:flutter/material.dart';
+import 'Widgets_player.dart';
+import 'songWidget.dart';
+import 'package:on_audio_query_pluse/on_audio_query.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
-Widget menuAdded(BuildContext context, int index, menuType tipo, int pId, int songId){
-  if(tipo==menuType.queue){
-    return ListTile(
-      leading: const Icon(Icons.remove_from_queue),
-      title: const Text("Rimuovi dalla coda"),
-      onTap: ()async{
-        Navigator.pop(context);
-        final pl = PlayerManager();
-        await pl.removeSongAt(index);
 
-      },
+import 'Database.dart';
+
+class allSongPage extends StatefulWidget{
+  const allSongPage({super.key});
+
+  @override
+  State<allSongPage> createState() => allSongsState();
+}
+
+class allSongsState extends State<allSongPage>{
+
+  final db = songDatabase();
+  final pl = PlayerManager();
+
+  final OnAudioQuery audioQuery = OnAudioQuery();
+
+  double sliderValue = 0.0;
+  bool isSyncing = false;
+
+  Future<void> pickAMusicFile ()async{
+    final result = await FilePicker.pickFiles(
+      type: FileType.audio,
+      allowMultiple: false,
     );
-  }else if(tipo == menuType.Playlist){
-    return ListTile(
-      leading: const Icon(Icons.remove),
-      title: const Text("Rimuovi dalla playlist"),
-      onTap: ()async{
-        Navigator.pop(context);
-        final db = songDatabase();
-        await db.removeASongFromAPlaylist(pId, songId);
 
-      },
+    if(result!=null){
+      final file = File(result.files.single.path!);
+
+      final dir = await getApplicationDocumentsDirectory();
+
+      final newFile = await file.copy(
+          "${dir.path}/${result.files.single.name}"
+      );
+
+
+      print(result.paths[0]);
+
+      print("Path first,path: ${newFile.path}");
+
+      final checkSum = await calculateChecksum(newFile.path);
+
+
+
+
+
+      //if(await db.isSongNotInserted(result.names[0]!)){
+      final nSong = Song(Name: result.names[0]!, path: newFile.path,duration: 0, checkSum: checkSum);
+      await db.insert(nSong);
+
+
+      await pl.addASongsToQueue([nSong]);
+
+      setState(() {
+
+      });
+      //}
+
+
+    }
+    print(await db.getAllSongs());
+  }
+
+  Future<void> getSOngsIntoPhone()async{
+
+
+    bool permission = await audioQuery.permissionsRequest();
+    print("Richiesta permesso audioQuery: $permission}");
+    bool status = await audioQuery.permissionsStatus();
+    print("status audioQuery: $status}");
+    if(!status){
+      permission = await audioQuery.permissionsRequest();
+      print("Richiesta permesso audioQuery: $permission}");
+    }
+    status = await audioQuery.permissionsStatus();
+    print("status audioQuery: $status}");
+    if (!await audioQuery.permissionsStatus())return;
+
+    final songs = await audioQuery.querySongs();
+    print("Numero di canzoni: ${songs.length}");
+
+    setState(() {
+      isSyncing = true;
+      sliderValue = 0.0;
+
+    });
+
+    final songsType = await Future.wait(songs.map((s)async{
+      return Song(Name: s.title, path: s.data, duration: s.duration ?? 0, checkSum: await calculateChecksum(s.data));
+    }));
+    int i = 0;
+    for(final s in songsType){
+      print(s.toString());
+      if(await db.isSongNotInserted(s.checkSum)){
+        await db.insert(s);
+      }
+      i++;
+      if(mounted){
+        setState(() {
+          sliderValue = (i/songs.length);
+        });
+      }
+
+    }
+
+    if(mounted){
+      setState(() {
+        isSyncing = false;
+      });
+    }
+
+
+  }
+
+  Future<void> showAddMenu()async{
+    pl.queueSongs.forEach((f)=>print(f.Name));
+    showModalBottomSheet(context: context, builder: (context){
+      return SafeArea(child: Column(
+        mainAxisSize: .min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.music_note),
+            title: const Text("Agiungi canzone"),
+            onTap: (){
+              Navigator.pop(context);
+              pickAMusicFile();
+            },
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.library_music),
+            title: const Text("Sincoranizza con la cartella 'music' del dispositivo"),
+            onTap: (){
+              Navigator.pop(context);
+              getSOngsIntoPhone();
+            },
+          )
+        ],
+      ));
+    });
+  }
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    db.loadSong();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Tutte le canzoni"),
+      ),
+      body: Column(
+        children: [
+          // -------------------------------------------------------------
+          // 1. INSERISCI QUI LA ROBA CHE VUOI AGGIUNGERE SOPRA
+          // -------------------------------------------------------------
+
+          if(isSyncing)
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 16,vertical: 8),
+            child: Row(
+              children: [
+                Expanded(child: LinearProgressIndicator(value: sliderValue,)),
+                const SizedBox(width: 12),
+                Text("${(sliderValue * 100).toInt()}%"),
+              ],
+            ),
+            ),
+
+
+
+          const Divider(height: 1), // Una linea di separazione facoltativa
+
+          // -------------------------------------------------------------
+          // 2. LA LISTA DELLE CANZONI (AVVOLTA IN EXPANDED)
+          // -------------------------------------------------------------
+          Expanded(
+            child: StreamBuilder<List<Song>>(
+              stream: db.songStream,
+              initialData: const [],
+              builder: (context, snapshot) {
+                final songs = snapshot.data ?? [];
+
+                if (songs.isEmpty) {
+                  return const Center(
+                    child: Text("Nessuna canzone disponibile"),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: songs.length,
+                  itemBuilder: (context, i) {
+                    final song = songs[i];
+                    return InkWell(
+                      onTap: () async {
+                        pl.queueSongs.clear();
+                        pl.queueSongs.add(song);
+                        await pl.loadQueue(pl.queueSongs, 0);
+                        setState(() {});
+                      },
+                      onLongPress: () {
+                        songMenu(context, song);
+                        setState(() {});
+                      },
+                      child: songWidget(song, i),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: showAddMenu,
+        tooltip: 'Increment',
+        child: const Icon(Icons.add),
+      ),
+      floatingActionButtonLocation: .endFloat,
+      bottomNavigationBar:  miniPlayer(audio: pl.player, expand: (){
+        Navigator.push(context, MaterialPageRoute(builder: (_)=>ExpandedPlayer(audio: pl.player, close: ()=>Navigator.pop(context),s:pl.currentSong)));
+      },s: pl.currentSong,),
     );
   }
-  return const Text("");
+}
+import 'package:flutter/material.dart';
+import 'dart:io';
+import 'allSongsPage.dart';
+import 'Database.dart';
+import 'openPlaylistPage.dart';
+import 'addAPlaylits.dart';
+import 'FavoritesSong.dart';
+import 'playlistMenu.dart';
+
+
+class allPlaylist extends StatefulWidget{
+  final String title;
+  const allPlaylist({super.key, required this.title});
+
+  @override
+  State<StatefulWidget> createState() => _allPlaylistState();
+}
+
+class _allPlaylistState extends State<allPlaylist>{
+
+  final db = songDatabase();
+  
+  Future<void> openAPLaylists(int id)async{
+    await Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: id,)));
+  }
+
+  Future<void> addPlaylist()async{
+    await Navigator.push(context, MaterialPageRoute(builder: (_)=>addAPlaylist(title: "add A PLayist")));
+  }
+
+  Widget coverImage(String path){
+    final file = File(path);
+    if(path != "" && file.existsSync()){
+      return ClipRRect(
+        borderRadius: .circular(16),
+        child: Image.memory(
+          file.readAsBytesSync(),
+          width: 60,
+          height: 60,
+          fit: .cover,
+        )
+      );
+    }else{
+      return Icon(
+        Icons.queue_music,
+        size: 60,
+      );
+    }
+  }
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    db.loadPlaylists();
+
+  }
+
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: StreamBuilder<List<PlayList>>(
+          stream: db.playlistStream,
+          initialData: const[],
+          builder: (context, snapshot){
+              final playlists = snapshot.data!;
+              return GridView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: playlists.length+2,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1,
+                  ),
+                  itemBuilder: (context, index){
+                    if(index==0){
+                      return Card(
+                        color: Colors.blueAccent,
+                        child: InkWell(
+                          onTap: ()async{
+                            await Navigator.push(context,
+                                MaterialPageRoute(builder: (_)=>allSongPage()));
+                          },
+                          child: Column(
+                            mainAxisAlignment: .center,
+                            children: [
+                              Icon(
+                                Icons.library_music,
+                                size: 60,
+                              ),
+                              const SizedBox(height: 8,),
+                              Text(
+                                "Tutte le canzoni",
+                                textAlign: TextAlign.center,
+                              )
+                            ],
+                          ),
+                        ),
+                      );
+
+                    }
+                    if(index == 1){
+                      return Card(
+                        color: Colors.redAccent,
+                        child: InkWell(
+                          onTap: ()async{
+                            await Navigator.push(context,
+                                MaterialPageRoute(builder: (_)=>FavoritesSong()));
+                          },
+                          child: Column(
+                            mainAxisAlignment: .center,
+                            children: [
+                              Icon(
+                                Icons.favorite_rounded,
+                                size: 60,
+                              ),
+                              const SizedBox(height: 8,),
+                              Text(
+                                "Canzoni preferite",
+                                textAlign: TextAlign.center,
+                              )
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                    final playlist = playlists[index-2];
+                    return Card(
+                      child: InkWell(
+                        onTap: ()=>openAPLaylists(playlist.id!),
+                        child: Column(
+                          mainAxisAlignment: .center,
+                          children: [
+                            coverImage(playlist.img ?? ""),
+                            const SizedBox(height: 8,),
+                            Text(
+                              playlist.name,
+                              textAlign: TextAlign.center,
+                            )
+                          ],
+                        ),
+                        onLongPress: (){
+                          playlistMenu(context, playlist);
+                        },
+                      ),
+                    );
+                  });
+          }),
+      floatingActionButton: FloatingActionButton(
+        onPressed: addPlaylist,
+        tooltip: 'Increment',
+        child: const Icon(Icons.add),
+      ),
+
+    );
+
+
+  }
+}
+import 'dart:async';
+import 'dart:convert';
+
+import 'dart:io';
+
+
+import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:crypto/crypto.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart';
+
+class Song{
+  final int? id;
+  final String Name;
+  final String path;
+  final int duration;
+  final String checkSum;
+  final bool isInFavorites;
+  const Song({required this.Name, required this.path,required this.duration,  required this.checkSum,this.isInFavorites=false, this.id,});
+
+  Map<String, Object> toDict(){
+    return {
+      "Name": Name,
+      "checksum": checkSum,
+      "path": path,
+      "duration": duration,
+      "isInFavorites": !isInFavorites ? 0 : 1
+
+    };
+  }
+  factory Song.fromDict(Map<String, Object?> m){
+    return Song(Name: m["name"] as String, path: m["path"] as String,checkSum: m["checksum"] as String, id: m["id"] as int, duration:  m["duration"] as int,
+        isInFavorites: (m["isInFavorites"] as int == 0 ? false : true) );
+  }
+
+  Song changeFavorites(bool value){
+    return Song(Name: Name, path: path, duration: duration, checkSum: checkSum, id: id, isInFavorites: value);
+  }
+
+  @override
+  String toString() {
+    // TODO: implement toString
+    return "Nome: $Name, path: $path, duration: $duration, checksum: $checkSum, isFavorites: $isInFavorites";
+  }
+}
+
+class songDatabase{
+  songDatabase._();
+  static songDatabase sD = songDatabase._();
+  factory songDatabase(){
+    return sD;
+  }
+  final String tableName = "Songs";
+  final String playlistTableName = "Playlists";
+
+  final StreamController<List<Song>> _controller = StreamController<List<Song>>.broadcast();
+  final StreamController<List<PlayList>> _controllerPlaylist = StreamController<List<PlayList>>.broadcast();
+
+  Future<void> loadSong()async{
+    final data = await getAllSongs();
+    _controller.add(data);
+  }
+
+  Future<void> loadPlaylists()async{
+    final data = await getAllPlaylists();
+    _controllerPlaylist.add(data);
+  }
+
+  Stream<List<Song>> get songStream => _controller.stream;
+  Stream<List<PlayList>> get playlistStream => _controllerPlaylist.stream;
+
+  late Database db;
+  Future<void> init()async{
+    db = await openDatabase(join(await getDatabasesPath(), 'database.db'),
+    onCreate: (db, version)async{
+      await db.execute('''
+      CREATE TABLE IF NOT EXISTS ${tableName}(
+        id INTEGER PRIMARY KEY,
+        name TEXT,
+        path TEXT,
+        checksum TEXT,
+        duration INTEGER,
+        isInFavorites INTEGER
+      );
+     
+      
+      ''');
+      await db.execute('''
+       CREATE TABLE IF NOT EXISTS ${playlistTableName}(
+        id INTEGER PRIMARY KEY,
+        name TEXT,
+        songs TEXT,
+        img TEXT,
+        isPinned INTEGER
+      );
+      
+      ''');
+    },version: 1);
+  }
+
+  Future<int> insert(Song s)async{
+    int id = await db.insert(tableName, s.toDict(),conflictAlgorithm: .replace);
+    loadSong();
+    return id;
+  }
+  Future<void> remove(int id)async{
+    await db.delete(tableName, where: "id = ?",whereArgs: [id]);
+    loadSong();
+  }
+  Future<void> update(Song s)async{
+    await db.update(tableName, s.toDict(),where: "id = ?", whereArgs: [s.id!]);
+    loadSong();
+  }
+  Future<List<Song>> getAllSongs()async{
+    final m =  await db.query(tableName);
+    return m.map((e){
+      return Song.fromDict(e);
+    }).toList();
+  }
+  Future<Song?> getASongById(int id)async{
+    final allS = await db.query(tableName, where: "id = ?",whereArgs: [id]);
+    return Song.fromDict(allS.first);
+  }
+  Future<bool> isSongNotInserted(String checksum)async{
+    final allS = await db.query(tableName,where: "checksum = ?",whereArgs: [checksum]);
+    return allS.isEmpty;
+  }
+
+  Future<List<Song>> getSongsById(List<int> ids)async{
+    List<Song> songs = [];
+    for(final id in ids){
+      final s = await getASongById(id);
+      if(s!=null) songs.add(s);
+    }
+    return songs;
+  }
+
+  Future<List<PlayList>> getAllPlaylists()async{
+    final m = await db.query(playlistTableName);
+
+    return m.map((p)=>PlayList.fromJson(p)).toList();
+  }
+
+  Future<int> addAPlaylist(PlayList p)async{
+    int id = await db.insert(playlistTableName, p.toJson());
+    loadPlaylists();
+    return id;
+  }
+
+  Future<void> removeAPlaylist(int id)async{
+    await db.delete(playlistTableName, where: "id = ?", whereArgs: [id]);
+    loadPlaylists();
+  }
+
+  Future<void> updateAPlaylist(PlayList p)async{
+    if(p.id == null) return;
+
+    await db.update(playlistTableName,p.toJson(), where: "id = ?", whereArgs: [p.id]);
+    loadPlaylists();
+
+  }
+  Future<PlayList> getAPlaylistById(int id)async{
+    final allP = await db.query(playlistTableName, where: "id = ?", whereArgs: [id]);
+    return PlayList.fromJson(allP.first);
+  }
+  Future<void> addASongToAPlaylist(int pId, int songId)async{
+    final playlist = await getAPlaylistById(pId);
+    if(playlist.songs.contains(songId))return;
+    final newP = PlayList(name: playlist.name, songs: [...playlist.songs, songId], img: playlist.img, id: playlist.id);
+    await updateAPlaylist(newP);
+  }
+
+  Future<List<PlayList>> getPlaylistsById(List<int> ids)async{
+    List<PlayList> playlists = [];
+    for(final id in ids){
+      playlists.add(await getAPlaylistById(id));
+    }
+
+    return playlists;
+  }
+
+  Future<void> removeASongFromAPlaylist(int pId, int songId)async{
+    final playlist = await getAPlaylistById(pId);
+    if(!playlist.songs.contains(songId))return;
+    final newP = PlayList(name: playlist.name, songs: playlist.songs.where((id)=>id!=songId).toList(), img: playlist.img, id: playlist.id);
+    await updateAPlaylist(newP);
+  }
+
+  Future<List<Song>> getAllFavoritesSongs()async{
+    final m = await db.query(tableName, where: "isInFavorites = ?", whereArgs: [1]);
+    return m.map((m)=>Song.fromDict(m)).toList();
+  }
+
+
+
+
+
+}
+
+class PlayList{
+  final String name;
+  final List<int> songs;
+  final String? img;
+  final int? id;
+  final bool isPinned;
+
+  const PlayList({required this.name, required this.songs,this.isPinned=false, this.id, this.img});
+  Map<String, dynamic> toJson(){
+    return {
+      'name': name,
+      'songs': songs.join(','),
+      'img': img,
+      "isPinned": !isPinned ? 0 : 1
+    };
+  }
+
+  factory PlayList.fromJson(Map<String, dynamic> json){
+	final songsString = json['songs'] as String;
+    return PlayList(name: json['name'] as String,
+        songs:songsString.isEmpty ? [] :  songsString.split(',').map((i)=>int.parse(i)).toList(),
+        id: json['id'] as int, img: json['img'] as String?, isPinned: json["isPinned"] as int == 0 ? false : true);
+  }
+
+
+}
+
+
+
+Future<String> calculateChecksum(String filePath)async{
+  final file = File(filePath);
+
+  if(!await file.exists()){
+    throw Exception("Il file con path $filePath non esiste");
+  }
+
+  final digest = await sha256.bind(file.openRead()).first;
+
+  return digest.toString();
+
+}
+
+class homeElements{
+  final List<int> recom_playlist;
+  final List<int> recom_songs;
+  final DateTime time_record;
+
+  const homeElements({required this.recom_playlist, required this.recom_songs, required this.time_record});
+
+  Map<String, dynamic> toJson(){
+    return {
+      'recom_playlist': recom_playlist,
+      'recom_songs': recom_songs,
+      'time_record': time_record.toIso8601String()
+
+    };
+
+}
+  factory homeElements.fromJson(Map<String, dynamic> json){
+    return homeElements(recom_playlist: List.from(json['recom_playlist']), recom_songs: List.from(json["recom_songs"]), time_record: DateTime.parse(json['time_record'] as String));
+  }
+}
+
+
+class recommadedELementsUtility{
+  recommadedELementsUtility();
+  Future<File> getFile()async{
+    final dir = await getTemporaryDirectory();
+    final file = File("${dir.path}/homeElements.json");
+    return file;
+  }
+  Future<homeElements?> loadElements()async{
+    final file = await getFile();
+    if(!await file.exists())return null;
+    final content = await file.readAsString();
+    final Map<String, dynamic> json = jsonDecode(content);
+    return homeElements.fromJson(json);
+  }
+  Future<File> saveElements(homeElements elements)async{
+    final file = await getFile();
+    final json = elements.toJson();
+    return file.writeAsString(jsonEncode(json));
+  }
 }

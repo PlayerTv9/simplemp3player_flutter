@@ -19,16 +19,18 @@ void playlistMenu(BuildContext context, PlayList p){
           leading: const Icon(Icons.open_in_new),
           title: const Text("Apri"),
           onTap: (){
-            Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: p.id,)));
             Navigator.pop(context);
+            Navigator.push(context, MaterialPageRoute(builder: (_)=>openPlayListPage(id: p.id,)));
+
           },
         ),
         ListTile(
           leading: const Icon(Icons.mode_edit),
           title: const Text("Modifica"),
           onTap: (){
-            Navigator.push(context, MaterialPageRoute(builder: (_)=>modifyPlaylistPage(id: p.id,)));
             Navigator.pop(context);
+            Navigator.push(context, MaterialPageRoute(builder: (_)=>modifyPlaylistPage(id: p.id,)));
+
           },
         ),
         ListTile(

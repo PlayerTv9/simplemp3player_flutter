@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
@@ -170,6 +171,15 @@ class songDatabase{
     await updateAPlaylist(newP);
   }
 
+  Future<List<PlayList>> getPlaylistsById(List<int> ids)async{
+    List<PlayList> playlists = [];
+    for(final id in ids){
+      playlists.add(await getAPlaylistById(id));
+    }
+
+    return playlists;
+  }
+
   Future<void> removeASongFromAPlaylist(int pId, int songId)async{
     final playlist = await getAPlaylistById(pId);
     if(!playlist.songs.contains(songId))return;
@@ -230,3 +240,45 @@ Future<String> calculateChecksum(String filePath)async{
 
 }
 
+class homeElements{
+  final List<int> recom_playlist;
+  final List<int> recom_songs;
+  final DateTime time_record;
+
+  const homeElements({required this.recom_playlist, required this.recom_songs, required this.time_record});
+
+  Map<String, dynamic> toJson(){
+    return {
+      'recom_playlist': recom_playlist,
+      'recom_songs': recom_songs,
+      'time_record': time_record.toIso8601String()
+
+    };
+
+}
+  factory homeElements.fromJson(Map<String, dynamic> json){
+    return homeElements(recom_playlist: List.from(json['recom_playlist']), recom_songs: List.from(json["recom_songs"]), time_record: DateTime.parse(json['time_record'] as String));
+  }
+}
+
+
+class recommadedELementsUtility{
+  recommadedELementsUtility();
+  Future<File> getFile()async{
+    final dir = await getTemporaryDirectory();
+    final file = File("${dir.path}/homeElements.json");
+    return file;
+  }
+  Future<homeElements?> loadElements()async{
+    final file = await getFile();
+    if(!await file.exists())return null;
+    final content = await file.readAsString();
+    final Map<String, dynamic> json = jsonDecode(content);
+    return homeElements.fromJson(json);
+  }
+  Future<File> saveElements(homeElements elements)async{
+    final file = await getFile();
+    final json = elements.toJson();
+    return file.writeAsString(jsonEncode(json));
+  }
+}
