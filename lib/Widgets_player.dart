@@ -58,6 +58,16 @@ class PlayerManager{
 
 
     player.play();
+    if(songs.isNotEmpty){
+      final db = songDatabase();
+      final c = chrono_element(type: crono_type.song, element_id: songs[0].id!);
+      await db.insertChronoElement(c);
+      final allCEleem = await db.getAllChronoElements();
+      for(final el in allCEleem){
+        print(el);
+      }
+    }
+
 
   }
 

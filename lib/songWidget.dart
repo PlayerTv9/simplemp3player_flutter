@@ -32,13 +32,13 @@ Widget image(Metadata? metadati){
   );
 }
 
-Widget songTitle(String title){
+Widget songTitle(String title, double maxWidth){
   const style = TextStyle(
       color: Colors.black,
       fontSize: 16
   );
 
-  const maxWidth = 180.0;
+  //const maxWidth = 180.0;
   final painter = TextPainter(
       text: TextSpan(text: title, style: style),
       maxLines: 1,
@@ -88,7 +88,7 @@ Widget indexWidget(int? index){
 
 
 
-Widget songWidget(Song s, int? index){
+Widget songWidget(Song s, int? index, {double maxWidth = 180.0} ){
 
 
   return Row(
@@ -100,7 +100,7 @@ Widget songWidget(Song s, int? index){
         return Row(
           children: [
             image(snapshot.data),
-            songTitle(snapshot.data?.title ?? s.Name),
+            songTitle(snapshot.data?.title ?? s.Name, maxWidth),
 
           ],
         );

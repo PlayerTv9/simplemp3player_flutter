@@ -248,7 +248,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<homeElements> getElements()async{
     final el = await homeElementsUtility.loadElements();
-    if(el == null || el.time_record.difference(DateTime.now()) > Duration(days: 1)){
+    if(el == null || DateTime.now().difference(el.time_record) > Duration(days: 1)){
       final allSongs = (await db.getAllSongs()).map((s)=>s.id!).toList();
       final allPlaylists = (await db.getAllPlaylists()).map((p)=>p.id!).toList();
       allSongs.shuffle(Random());
@@ -309,6 +309,7 @@ class _MyHomePageState extends State<MyHomePage> {
     //getSOngsIntoPhone();
     db.loadSong();
     db.loadPlaylists();
+    db.loadChronology();
     getElements();
     //initIncomingAudioFiles();
 
@@ -365,7 +366,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           songMenu(context, song);
                           setState(() {});
                         },
-                        child: songWidget(song,null),
+                        child: songWidget(song,null,maxWidth: 100.0),
                       );
                     });
 
@@ -373,7 +374,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
 
 
-        Expanded(child: FutureBuilder<List<PlayList>>(future: db.getPlaylistsById(playlists),
+        FutureBuilder<List<PlayList>>(future: db.getPlaylistsById(playlists),
                 builder: (context, snapshot){
                   if(snapshot.connectionState == ConnectionState.waiting)return CircularProgressIndicator();
                   if(!snapshot.hasData || snapshot.data!.isEmpty){
@@ -384,7 +385,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   }
                   final elements = snapshot.data!;
                   return SizedBox(
-                    height: 64,
+                    height: 120,
                     child: ListView.builder(
                         itemCount: elements.length,
                         scrollDirection: Axis.horizontal,
@@ -418,7 +419,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                   );
                 }),
-          )
+
 
 
 

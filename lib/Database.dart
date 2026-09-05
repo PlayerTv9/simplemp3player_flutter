@@ -53,9 +53,11 @@ class songDatabase{
   }
   final String tableName = "Songs";
   final String playlistTableName = "Playlists";
+  final String chronologiTableName = "chronology";
 
   final StreamController<List<Song>> _controller = StreamController<List<Song>>.broadcast();
   final StreamController<List<PlayList>> _controllerPlaylist = StreamController<List<PlayList>>.broadcast();
+  final StreamController<List<chrono_element>> _controllerChrono = StreamController<List<chrono_element>>.broadcast();
 
   Future<void> loadSong()async{
     final data = await getAllSongs();
@@ -66,9 +68,14 @@ class songDatabase{
     final data = await getAllPlaylists();
     _controllerPlaylist.add(data);
   }
+  Future<void> loadChronology()async{
+    final data = await getAllChronoElements();
+    _controllerChrono.add(data);
+  }
 
   Stream<List<Song>> get songStream => _controller.stream;
   Stream<List<PlayList>> get playlistStream => _controllerPlaylist.stream;
+  Stream<List<chrono_element>> get chronoStream => _controllerChrono.stream;
 
   late Database db;
   Future<void> init()async{
@@ -93,8 +100,21 @@ class songDatabase{
         songs TEXT,
         img TEXT,
         isPinned INTEGER
+        
       );
       
+
+      ''');
+
+      await db.execute('''
+       CREATE TABLE IF NOT EXISTS ${chronologiTableName}(
+        id INTEGER PRIMARY KEY,
+        type TEXT,
+        element_id INTEGER,
+        internalElement TEXT
+      );
+      
+
       ''');
     },version: 1);
   }
@@ -193,6 +213,38 @@ class songDatabase{
   }
 
 
+  Future<int> insertChronoElement(chrono_element c)async{
+    final id = await db.insert(chronologiTableName, c.to_dict());
+    loadChronology();
+    return id;
+  }
+  Future<void> deleteAChronosELement(int id)async{
+    await db.delete(chronologiTableName, where: 'id = ?', whereArgs: [id]);
+    loadChronology();
+  }
+  Future<void> updateChronoElement(chrono_element c)async{
+    if(c.id==null)return;
+    await db.update(chronologiTableName,c.to_dict(), where: 'id = ?', whereArgs: [c.id!]);
+    loadChronology();
+  }
+  Future<chrono_element> getAChonoElement(int id)async{
+    final c = await db.query(chronologiTableName, where: 'id = ?', whereArgs: [id]);
+    return chrono_element.fromMap(c.first);
+  }
+  Future<void> insertInternalElementInChronoElement(int id, int element_id)async{
+    final c_item = await getAChonoElement(id);
+    if(c_item.internalElement == null)return;
+    final newC = chrono_element(type: c_item.type, element_id: c_item.element_id, id: id, internalElement: [...c_item.internalElement!, id]);
+    await updateChronoElement(newC);
+  }
+
+
+  Future<List<chrono_element>> getAllChronoElements()async{
+    final m = await db.query(chronologiTableName);
+    return m.map((e)=>chrono_element.fromMap(e)).toList();
+  }
+
+
 
 
 
@@ -240,6 +292,46 @@ Future<String> calculateChecksum(String filePath)async{
 
 }
 
+enum crono_type{
+  playlist,
+  song,
+  Error
+}
+
+class chrono_element{
+  final int? id;
+  final crono_type type;
+  final int element_id;
+  final List<int>? internalElement;
+  const chrono_element({required this.type, required this.element_id, this.internalElement, this.id});
+
+  Map<String, dynamic> to_dict(){
+    return {
+      'type': type.name,
+      'element_id': element_id,
+      'internalElement': internalElement != null ? internalElement!.join(',') : ""
+    };
+  }
+  factory chrono_element.fromMap(Map<String, dynamic> map){
+    final i_element = map['internalElement'] as String;
+    return chrono_element(type: crono_type.values.firstWhere(
+        (t)=>t.name==map['type'] as String,
+        orElse: ()=>crono_type.Error
+    ),
+        element_id: map['element_id'] as int,
+        internalElement: i_element != "" ? i_element.split(',').map((i) => int.parse(i)).toList() : null,
+        id: map['id'] as int
+
+    );
+  }
+
+  @override
+  String toString() {
+    // TODO: implement toString
+    return "id: $id, element_id: $element_id, i_element: ${internalElement?.join(',')} , type: ${type.name}";
+  }
+}
+
 class homeElements{
   final List<int> recom_playlist;
   final List<int> recom_songs;
@@ -282,3 +374,4 @@ class recommadedELementsUtility{
     return file.writeAsString(jsonEncode(json));
   }
 }
+
